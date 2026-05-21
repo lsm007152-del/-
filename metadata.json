@@ -1,0 +1,6 @@
+{
+  "name": "부강공인중개사사무소",
+  "description": "부산진구 아파트, 오피스텔, 분양권, 공장/토지 전문 부강공인중개사사무소 매물 및 위치 정보",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
