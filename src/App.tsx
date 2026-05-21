@@ -26,6 +26,7 @@ import {
   FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Map, MapMarker } from 'react-kakao-maps-sdk';
 
 // ==========================================
 // TYPES & INTERFACES DEFINITIONS
@@ -53,6 +54,8 @@ export interface Property {
   tags: string[];
   description: string;
   features: string[];
+  mapLat: number;
+  mapLng: number;
 }
 
 // ==========================================
@@ -77,7 +80,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80',
     tags: ['역세권', '대단지', '올수리', '초품아'],
     description: '개금역 도보 5분 거리의 초역세권 대단지 아파트입니다. 남향 배치로 일조량이 뛰어납니다. 내부 인테리어 올수리되어 즉시 입주 가능한 최상급 매물입니다.',
-    features: ['방 3개, 욕실 2개', '주차 1.3대 가능', '개금초등학교 도보 3분', '단지 내 커뮤니티 센터 우수']
+    features: ['방 3개, 욕실 2개', '주차 1.3대 가능', '개금초등학교 도보 3분', '단지 내 커뮤니티 센터 우수'],
+    mapLat: 35.1535,
+    mapLng: 129.0185
   },
   {
     id: 'prop-2',
@@ -97,7 +102,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
     tags: ['신축', '풀옵션', '즉시입주', '주택수제외'],
     description: '서면 번화가 및 범내골역 초인접 인프라 끝판왕 신축 오피스텔입니다. 고품격 풀옵션 세련된 빌트인 가구 탑재 및 시스템 에어컨, 3도어 냉장고 무상 제공.',
-    features: ['1인 가구 최적화 원룸', '자주식+기계식 복합 주차', '서면역 도보 8분', '24시간 보안 요원 상주']
+    features: ['1인 가구 최적화 원룸', '자주식+기계식 복합 주차', '서면역 도보 8분', '24시간 보안 요원 상주'],
+    mapLat: 35.1485,
+    mapLng: 129.0585
   },
   {
     id: 'prop-3',
@@ -116,7 +123,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80',
     tags: ['대단지', '프리미엄', '2025년입주', '브랜드단지'],
     description: '2,276세대 압도적 메이저 브랜드 컨소시엄 대단지 아파트의 로얄 동호수 분양권입니다. 미래 가치 상승 확실한 양정 뉴타운의 중심축 매물입니다.',
-    features: ['방 3개, 판상형 4Bay', '지하철 양정역 도보권', '초중고 명문 학군 중심', '피트니스, 실내골프장 완비']
+    features: ['방 3개, 판상형 4Bay', '지하철 양정역 도보권', '초중고 명문 학군 중심', '피트니스, 실내골프장 완비'],
+    mapLat: 35.1712,
+    mapLng: 129.0725
   },
   {
     id: 'prop-4',
@@ -135,7 +144,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80',
     tags: ['준공업지', '차량진입원활', '공장부지', '투자추천'],
     description: '진입 도로가 넓어 5톤 차량 무리 없이 양방향 통행 가능한 개금동 우수 준공업지입니다. 인근 소형 가공 공장, 전시장 또는 차고지로 쓰기에 강력 추천합니다.',
-    features: ['지목: 대지 및 공장용지', '건폐율 70% 용적률 350%', '전력 50kW 증설 완비', '주변 민원 발생 우려 없음']
+    features: ['지목: 대지 및 공장용지', '건폐율 70% 용적률 350%', '전력 50kW 증설 완비', '주변 민원 발생 우려 없음'],
+    mapLat: 35.1575,
+    mapLng: 129.0232
   },
   {
     id: 'prop-5',
@@ -155,7 +166,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=600&q=80',
     tags: ['코너상가', '유동인구', '전면테라스', '학원/카페추천'],
     description: '웨딩홀 문화광장 배후수요를 품은 최적의 로드숍 코너 1층 상가입니다. 전면 유리가 넓어 시인성이 높으며 테라스 공간 설치 협의가 매끄럽게 가능합니다.',
-    features: ['대로변 노출 극대화 매물', '기존 프랜차이즈 계약 만료 무권리', '천장형 냉난방 냉온기 완비', '공용 관리비 저렴 수준']
+    features: ['대로변 노출 극대화 매물', '기존 프랜차이즈 계약 만료 무권리', '천장형 냉난방 냉온기 완비', '공용 관리비 저렴 수준'],
+    mapLat: 35.1465,
+    mapLng: 129.0545
   },
   {
     id: 'prop-6',
@@ -174,7 +187,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80',
     tags: ['전세자금대출', '중기청가능', '고층', '쓰리룸'],
     description: '깔끔한 신축급 주상복합 오피스텔 전세 매물입니다. 방2/거실1 구조로 매끄럽게 잘 짜여 신혼부부 또는 2인 가구 주거에 압도적으로 강력 추천 드립니다.',
-    features: ['빌트인 냉장고, 드럼세탁기 지원', '전세대 안심 전세 보증보험 가입 희망', '지하주차 요율 매우 양호', '주변 조용하고 편의점 풍부']
+    features: ['빌트인 냉장고, 드럼세탁기 지원', '전세대 안심 전세 보증보험 가입 희망', '지하주차 요율 매우 양호', '주변 조용하고 편의점 풍부'],
+    mapLat: 35.1541,
+    mapLng: 129.0203
   },
   {
     id: 'prop-7',
@@ -193,7 +208,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=600&q=80',
     tags: ['완전신축', '시민공원조망', '커뮤니티상급', '명품조경'],
     description: '부산시민공원 도보 생활권에 빛나는 2,616세대 시그니처 대단지 레미안입니다. 완전 신축으로 최고급 스마트 홈 사물인터넷(IoT) 시스템이 들어가 있습니다.',
-    features: ['방 3개, 환상적인 4Bay 판상', '부산시민공원 그린뷰 극대화', '커뮤니티 조식 서비스 지원 단지', '명품 보육 어린이집 연계']
+    features: ['방 3개, 환상적인 4Bay 판상', '부산시민공원 그린뷰 극대화', '커뮤니티 조식 서비스 지원 단지', '명품 보육 어린이집 연계'],
+    mapLat: 35.1745,
+    mapLng: 129.0512
   },
   {
     id: 'prop-8',
@@ -212,7 +229,9 @@ const INITIAL_PROPERTIES: Property[] = [
     imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80',
     tags: ['서면역근접', '소규모사무실', '가성비', '오피스빌딩'],
     description: '서면역 도보 4분 교통 요지에 위치한 단독 사무실용 소형 빌딩 호실입니다. 현 공실 상태로 즉시 개업 및 매수가 매우 간절하고 우량하게 나와 있습니다.',
-    features: ['개별 천장 매립 에어컨 2대', '건물 엘리베이터 3대 가동', '호실 내 개별 씽크 수전 분리', '주변 법무사, 중개업 최적']
+    features: ['개별 천장 매립 에어컨 2대', '건물 엘리베이터 3대 가동', '호실 내 개별 씽크 수전 분리', '주변 법무사, 중개업 최적'],
+    mapLat: 35.1565,
+    mapLng: 129.0592
   }
 ];
 
@@ -352,37 +371,39 @@ export default function App() {
   };
 
   // Submit offline inquiry handle
-  const handleInquirySubmit = (e: React.FormEvent) => {
+  const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consultName || !consultPhone) {
       alert('성함과 연락처는 필수 입력 항목입니다.');
       return;
     }
-    
-    // Simulate API registration
-    const data = {
-      name: consultName,
-      phone: consultPhone,
-      text: consultText,
-      type: consultType,
-      propertyId: consultPropertyId,
-      date: new Date().toISOString()
-    };
-    
-    const existing = localStorage.getItem('bugang_consultations') || '[]';
-    const arr = JSON.parse(existing);
-    arr.push(data);
-    localStorage.setItem('bugang_consultations', JSON.stringify(arr));
 
-    setIsConsultSubmitted(true);
-    setTimeout(() => {
-      // Clear states after submissions
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw768QQ_9in5Cr8sUQFtboMBH8spv3ORmRL7tB-rerfkHINBgd6nVp2ru90kM6sJNFYpw/exec';
+
+    try {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientName: consultName,
+          clientPhone: consultPhone,
+          message: consultText,
+          propertyName: consultType + " / " + consultPropertyId,
+          date: new Date().toLocaleString()
+        })
+      });
+
+      alert('상담 신청이 완료되었습니다!');
+      setIsConsultSubmitted(true);
       setConsultName('');
       setConsultPhone('');
       setConsultText('');
       setConsultPropertyId('');
-      setIsConsultSubmitted(false);
-    }, 4500);
+      setTimeout(() => setIsConsultSubmitted(false), 4500);
+    } catch (error) {
+      alert('전송 중 오류가 발생했습니다.');
+    }
   };
 
   // Open detailing modal with listing linkage pre-set
@@ -1304,113 +1325,53 @@ export default function App() {
                   남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
                 </p>
               </div>
-
-              {/* Inquiry form */}
-              <form onSubmit={handleInquirySubmit} className="flex flex-col gap-4 text-xs font-semibold">
-                
-                {/* Inquiry Type */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-slate-600 font-black">상담 분야 선택</label>
-                  <div className="grid grid-cols-2 gap-1 bg-slate-100/80 p-0.5 rounded-lg text-[10px]">
-                    {['매수문의', '매도접수', '상세매물문의', '자문컨설팅'].map(type => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setConsultType(type)}
-                        className={`py-1 rounded-md text-center transition-all cursor-pointer ${
-                          consultType === type 
-                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs' 
-                            : 'text-slate-500 hover:text-slate-800'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Target Linked Property descriptor (if selected) */}
-                {consultPropertyId && (
-                  <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3 flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-amber-800 font-black">선택 연결 매물</span>
-                      <button 
-                        type="button"
-                        onClick={() => setConsultPropertyId('')}
-                        className="text-amber-700 hover:text-amber-900"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <span className="text-slate-700 font-extrabold text-[11px] truncate block">
-                      {consultPropertyId}
-                    </span>
-                  </div>
-                )}
-
-                {/* Customer name */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-slate-600 font-black">성함</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="고객명 입력 (예: 홍길동)"
-                    value={consultName}
-                    onChange={(e) => setConsultName(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:bg-white placeholder-slate-400 font-bold"
-                  />
-                </div>
-
-                {/* Customer Phone */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-slate-600 font-black">연락처</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="010-1234-5678"
-                    value={consultPhone}
-                    onChange={(e) => setConsultPhone(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:bg-white placeholder-slate-400 font-bold"
-                  />
-                </div>
-
-                {/* Consultation Details */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-slate-600 font-black">요청사항 / 구하시는 평형대</label>
-                  <textarea
-                    rows={3}
-                    placeholder="이사 시기, 구체적인 예산, 선호하는 단지 정보를 간략하게 적어주시면 큰 도움이 됩니다."
-                    value={consultText}
-                    onChange={(e) => setConsultText(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:bg-white placeholder-slate-400 font-bold resize-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={isConsultSubmitted}
-                  className={`w-full py-3 rounded-xl font-black text-sm text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all ${
-                    isConsultSubmitted 
-                      ? 'bg-emerald-500 text-white cursor-default' 
-                      : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                  }`}
-                >
-                  {isConsultSubmitted ? (
-                    <>
-                      <Check className="w-4 h-4 text-white" />
-                      <span>신속하게 접수되었습니다!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>상담 예약 신청하기</span>
-                    </>
-                  )}
-                </button>
-              </form>
-
+            
               {/* Instant Status Counter */}
+              <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+  
+  <input
+    type="text"
+    placeholder="성함"
+    value={consultName}
+    onChange={(e) => setConsultName(e.target.value)}
+    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+  />
+
+  <input
+    type="tel"
+    placeholder="연락처"
+    value={consultPhone}
+    onChange={(e) => setConsultPhone(e.target.value)}
+    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+  />
+
+  <select
+    value={consultType}
+    onChange={(e) => setConsultType(e.target.value)}
+    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+  >
+    <option value="매수문의">매수 문의</option>
+    <option value="매도문의">매도 문의</option>
+    <option value="매물접수">매물 접수</option>
+    <option value="상담문의">일반 상담</option>
+  </select>
+
+  <textarea
+    placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+    value={consultText}
+    onChange={(e) => setConsultText(e.target.value)}
+    rows={5}
+    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+  />
+
+  <button
+    type="submit"
+    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition-colors"
+  >
+    상담 신청 보내기
+  </button>
+
+</form>
               <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100 flex items-center justify-between text-center">
                 <div className="flex-1">
                   <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
@@ -1450,7 +1411,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
             
             {/* Visual Vector Simulated Map (8 columns for gorgeous UI map layout) */}
-            <div className="lg:col-span-8 bg-amber-50/20 rounded-2xl border border-amber-200/50 relative overflow-hidden min-h-[350px] p-4 flex flex-col justify-between">
+            <div className="lg:col-span-8 bg-amber-50/10 rounded-2xl border border-amber-200/50 relative overflow-hidden min-h-[480px] p-4 flex flex-col justify-between">
               
               {/* Map Absolute Overlay Banner */}
               <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-amber-200/50 shadow-sm z-10 text-xs flex flex-col gap-0.5">
@@ -1461,59 +1422,48 @@ export default function App() {
                 <span className="text-[10px] text-slate-400 font-bold">오프라인 차량 주차 상시 무료 지원 가능</span>
               </div>
 
-              {/* Simulated Map SVG Display Canvas */}
-              <div className="flex-grow w-full relative flex items-center justify-center py-6">
-                <svg className="w-full h-full max-h-[300px] text-slate-300" viewBox="0 0 800 400" fill="none">
-                  
-                  {/* Grid Lines background */}
-                  <defs>
-                    <pattern id="mapGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(245,158,11,0.06)" strokeWidth="1" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#mapGrid)" rx="16" />
+              {/* Kakao Map Component Container */}
+              <div className="w-full h-[400px] rounded-2xl overflow-hidden relative border border-slate-105 shadow-inner mt-11">
+                <Map
+                  center={{ lat: 35.1542, lng: 129.0195 }}
+                  style={{ width: "100%", height: "100%" }}
+                  level={4}
+                >
+                  {/* Office Pin */}
+                  <MapMarker
+                    position={{ lat: 35.1542, lng: 129.0195 }}
+                  >
+                    <div className="p-2 text-xs font-black text-slate-900 bg-white border border-amber-300 rounded shadow-md max-w-[180px]">
+                      🏢 부강공인중개사사무소
+                      <div className="text-[9px] text-amber-600 font-extrabold mt-0.5">냉정로 273 (1층)</div>
+                    </div>
+                  </MapMarker>
 
-                  {/* Main Roads network */}
-                  <path d="M 50 200 L 750 200" stroke="#E2E8F0" strokeWidth="32" strokeLinecap="round" />
-                  <path d="M 50 200 L 750 200" stroke="#F1F5F9" strokeWidth="24" strokeLinecap="round" />
-                  <text x="180" y="204" className="text-[11px] fill-slate-400 font-black tracking-wider">냉정로 (대로변)</text>
-
-                  {/* Intersecting vertical road */}
-                  <path d="M 460 50 L 460 350" stroke="#E2E8F0" strokeWidth="24" strokeLinecap="round" />
-                  <path d="M 460 50 L 460 350" stroke="#F1F5F9" strokeWidth="16" strokeLinecap="round" />
-
-                  {/* Subway stations representation */}
-                  <circle cx="100" cy="200" r="16" fill="#FDE68A" stroke="#F59E0B" strokeWidth="2" className="animate-pulse" />
-                  <rect x="70" y="230" width="60" height="22" rx="6" fill="#1E293B" />
-                  <text x="100" y="244" textAnchor="middle" className="text-[9px] fill-white font-extrabold">개금역 2번 출구</text>
-
-                  <circle cx="700" cy="200" r="16" fill="#FDE68A" stroke="#F59E0B" strokeWidth="2" />
-                  <rect x="670" y="230" width="60" height="22" rx="6" fill="#1E293B" />
-                  <text x="700" y="244" textAnchor="middle" className="text-[9px] fill-white font-extrabold">서면역 방향</text>
-
-                  {/* Neighboring buildings */}
-                  <rect x="220" y="70" width="90" height="50" rx="8" fill="white" stroke="#E2E8F0" />
-                  <text x="265" y="100" textAnchor="middle" className="text-[10px] fill-slate-500 font-black">개금초등학교</text>
-
-                  <rect x="520" y="75" width="100" height="50" rx="8" fill="white" stroke="#E2E8F0" />
-                  <text x="570" y="105" textAnchor="middle" className="text-[10px] fill-slate-500 font-black">현대아이파크단지</text>
-
-                  {/* TARGET Marker: 우리 사무소 */}
-                  <path d="M 380 180 L 380 130" stroke="#F59E0B" strokeWidth="3" strokeDasharray="4 2" />
-                  
-                  {/* Glowing core animation widget */}
-                  <circle cx="380" cy="200" r="28" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.3)" strokeWidth="1" className="animate-ping" />
-                  <circle cx="380" cy="200" r="14" fill="#F59E0B" stroke="white" strokeWidth="3" className="shadow-lg" />
-                  
-                  {/* Label for target location */}
-                  <rect x="300" y="110" width="160" height="30" rx="8" fill="#F59E0B" className="shadow-lg" />
-                  <text x="380" y="129" textAnchor="middle" className="text-xs fill-slate-950 font-black">🏢 부강부동산 (냉정로 273)</text>
-                  
-                </svg>
+                  {/* Listings Markers */}
+                  {filteredProperties.map((prop) => (
+                    <MapMarker
+                      key={prop.id}
+                      position={{ lat: prop.mapLat, lng: prop.mapLng }}
+                      onClick={() => openDetailsAndSetInquiry(prop)}
+                      image={{
+                        src: "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
+                        size: { width: 24, height: 35 }
+                      }}
+                    >
+                      <div className="p-1.5 text-[10px] font-black text-slate-800 bg-white border border-slate-200 rounded shadow max-w-[160px] truncate cursor-pointer">
+                        <span className="text-[9px] bg-amber-400 text-slate-950 px-1 py-0.2 rounded mr-1">
+                          {prop.transactionType}
+                        </span>
+                        {prop.name.replace(' 아파트', '')}
+                        <div className="text-amber-800 font-extrabold mt-0.5">{prop.priceText}</div>
+                      </div>
+                    </MapMarker>
+                  ))}
+                </Map>
               </div>
 
               {/* Instructions list below */}
-              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/50 text-slate-600 font-semibold text-[10px] sm:text-xs tracking-tight flex flex-col gap-1 mt-auto">
+              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/50 text-slate-600 font-semibold text-[10px] sm:text-xs tracking-tight flex flex-col gap-1 mt-4">
                 <span className="font-extrabold text-[#F59E0B] block">🚗 승용차 방문시:</span>
                 <p>네비게이션에 대놓고 <span className="font-black text-slate-800 underline decoration-amber-400">냉정로 273</span> 입력후 정주행 하시면, 매장 바로 좌측 주차장에 무료 주차 가능합니다.</p>
               </div>
