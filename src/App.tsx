@@ -27,18 +27,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Map, MapMarker } from 'react-kakao-maps-sdk';
+import html2canvas from 'html2canvas';
 
 // ==========================================
 // TYPES & INTERFACES DEFINITIONS
 // ==========================================
 
 export type TransactionType = '전체' | '매매' | '전세' | '월세';
-export type FilterCategory = '아파트・오피스텔' | '분양권' | '공장・토지' | '상가・사무실' | '우리집' | 'MY관심';
+export type FilterCategory = '아파트 오피스텔' | '분양권' | '원룸 투룸' | '주택 빌라' | '상가 공장 토지';
 
 export interface Property {
   id: string;
   name: string;
-  category: '아파트' | '오피스텔' | '분양권' | '공장/토지' | '상가/사무실';
+  category: '아파트 오피스텔' | '분양권' | '원룸 투룸' | '주택 빌라' | '상가/공장/토지';
   transactionType: '매매' | '전세' | '월세';
   priceText: string;
   priceValue: number; // For filtering (in ten million KRW units, e.g. 45000 for 4.5억)
@@ -66,7 +67,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-1',
     name: '개금 현대아이파크 아파트',
-    category: '아파트',
+    category: '아파트 오피스텔',
     transactionType: '매매',
     priceText: '4억 8,000만',
     priceValue: 48000,
@@ -87,7 +88,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-2',
     name: '서면 삼정그린코아 더시티',
-    category: '오피스텔',
+    category: '원룸 투룸',
     transactionType: '월세',
     priceText: '보증금 1,000 / 월 65만',
     priceValue: 1000,
@@ -130,7 +131,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-4',
     name: '개금 준공업지역 당감동 인접 공장 부지',
-    category: '공장/토지',
+    category: '상가/공장/토지',
     transactionType: '매매',
     priceText: '8억 5,000만',
     priceValue: 85000,
@@ -151,7 +152,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-5',
     name: '범천동 메리움 상가 상가',
-    category: '상가/사무실',
+    category: '상가/공장/토지',
     transactionType: '월세',
     priceText: '보증금 3,000 / 월 150만',
     priceValue: 3000,
@@ -173,7 +174,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-6',
     name: '개금역 스마트W 아파텔',
-    category: '오피스텔',
+    category: '원룸 투룸',
     transactionType: '전세',
     priceText: '전세 2억 1,000만',
     priceValue: 21000,
@@ -194,7 +195,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-7',
     name: '연지 래미안어반파크 아파트',
-    category: '아파트',
+    category: '아파트 오피스텔',
     transactionType: '전세',
     priceText: '전세 3억 5,000만',
     priceValue: 35000,
@@ -215,7 +216,7 @@ const INITIAL_PROPERTIES: Property[] = [
   {
     id: 'prop-8',
     name: '서면 에메랄드 중심가 사무실',
-    category: '상가/사무실',
+    category: '상가/공장/토지',
     transactionType: '매매',
     priceText: '3억 2,000만',
     priceValue: 32000,
@@ -232,6 +233,48 @@ const INITIAL_PROPERTIES: Property[] = [
     features: ['개별 천장 매립 에어컨 2대', '건물 엘리베이터 3대 가동', '호실 내 개별 씽크 수전 분리', '주변 법무사, 중개업 최적'],
     mapLat: 35.1565,
     mapLng: 129.0592
+  },
+  {
+    id: 'prop-9',
+    name: '개금동 모던 신축 빌라',
+    category: '주택 빌라',
+    transactionType: '매매',
+    priceText: '2억 9,000만',
+    priceValue: 29000,
+    pyongValue: 24,
+    floorText: '3층/5층',
+    direction: '남향',
+    location: '부산광역시 부산진구 개금동',
+    useYearText: '2022년 준공 (신축)',
+    useYearValue: 2022,
+    householdsCount: 15,
+    imageUrl: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=600&q=80',
+    tags: ['올수리', '강력추천', '주차가능', '조용한동네'],
+    description: '개금역 인접 조용한 주거 단지 내 고품격 신축 빌라입니다. 모던한 인테리어와 고급 자재를 아낌없이 투자하였으며 엘리베이터와 자주식 주차장이 완비되어 있습니다.',
+    features: ['방 3개, 욕실 2개 실면적 우수', '한샘 정품 주방 가구 및 아일랜드 식탁 적용', '초등학교 인접 안심 등하교길', '개별 지하 전용 창고 별도 제공'],
+    mapLat: 35.1525,
+    mapLng: 129.0175
+  },
+  {
+    id: 'prop-10',
+    name: '양정동 마당 넓은 이층 주택',
+    category: '주택 빌라',
+    transactionType: '매매',
+    priceText: '6억 5,000만',
+    priceValue: 65000,
+    pyongValue: 58,
+    floorText: '지상 1-2층 단독',
+    direction: '남향',
+    location: '부산광역시 부산진구 양정동',
+    useYearText: '1998년 준공 (관리최상)',
+    useYearValue: 1998,
+    householdsCount: 1,
+    imageUrl: 'https://images.unsplash.com/photo-1564013799915-ab600027ffc6?auto=format&fit=crop&w=600&q=80',
+    tags: ['마당보유', '남향', '개인차고', '대지넓음'],
+    description: '도심 속 정원과 개인 주차가 완벽하게 보장되는 이층 단독주택입니다. 고급스럽게 잘 가꾸어진 조경 마당과 함께 햇살이 가득한 거실을 자랑합니다. 일부 리모델링 완료.',
+    features: ['대지 면적 65평 / 연면적 58평형 대형 구조', '마당 내 잔디와 감나무 등 프라이빗 조경 가작', '양정역 도보 8분 역세권 입지', '옥상 루프탑 테라스 바베큐 파티 최적'],
+    mapLat: 35.1705,
+    mapLng: 129.0715
   }
 ];
 
@@ -241,8 +284,8 @@ export default function App() {
   // ==========================================
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'매물검색' | '분양권' | '공장/토지' | '오시는길'>('매물검색');
-  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('아파트・오피스텔');
+  const [activeTab, setActiveTab] = useState<'매물검색' | '아파트 오피스텔' | '분양권' | '원룸 투룸' | '주택 빌라' | '상가 공장 토지' | '오시는길' | '매물접수'>('매물검색');
+  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('아파트 오피스텔');
 
   // Filter conditions
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionType>('전체');
@@ -276,8 +319,179 @@ export default function App() {
   const [consultPropertyId, setConsultPropertyId] = useState<string>('');
   const [isConsultSubmitted, setIsConsultSubmitted] = useState<boolean>(false);
 
-  // Active sub-pills for sub categories inside "아파트/오피스텔" filter
-  const [activeSubPills, setActiveSubPills] = useState<string[]>(['아파트', '오피스텔']);
+  // Active sub-pills for sub categories inside Naver style filters
+  const [activeSubPills, setActiveSubPills] = useState<string[]>(['아파트 오피스텔']);
+
+  const [properties, setProperties] = useState<Property[]>(INITIAL_PROPERTIES);
+
+  // Fetch properties from Google Sheets endpoint on load
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('https://script.google.com/macros/s/AKfycbxkjL9Vlrtnew4UIligPk3o88PE-Rr1c2aclwVYjQLPFSmPg3q5L34cBuGySTz-TCzjDg/exec');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+          // Map properties to our Property structure
+          const mapped: Property[] = data.map((item: any, idx: number) => {
+            const id = item.id ? `${String(item.id)}-${idx}` : `sheet-prop-${idx}`;
+            const city = String(item.city || '').trim();
+            const rawCategory = String(item.category || '').trim();
+            const rawPrice = String(item.price || '').trim();
+
+            // 1. Map Category
+            let category: '아파트 오피스텔' | '분양권' | '원룸 투룸' | '주택 빌라' | '상가/공장/토지' = '아파트 오피스텔';
+            if (rawCategory.includes('아파트') || rawCategory.includes('오피스텔')) {
+              category = '아파트 오피스텔';
+            } else if (rawCategory.includes('분양권')) {
+              category = '분양권';
+            } else if (rawCategory.includes('원룸') || rawCategory.includes('투룸')) {
+              category = '원룸 투룸';
+            } else if (rawCategory.includes('주택') || rawCategory.includes('빌라')) {
+              category = '주택 빌라';
+            } else if (rawCategory.includes('상가') || rawCategory.includes('공장') || rawCategory.includes('토지')) {
+              category = '상가/공장/토지';
+            }
+
+            // 2. Map Transaction Type
+            let transactionType: '매매' | '전세' | '월세' = '매매';
+            if (rawPrice.includes('전세')) {
+              transactionType = '전세';
+            } else if (rawPrice.includes('월세')) {
+              transactionType = '월세';
+            } else if (rawPrice.includes('매매')) {
+              transactionType = '매매';
+            }
+
+            // 3. Generate realistic price value & text based on ID/idx
+            let priceValue = 25000;
+            let rentValue = 0;
+            let priceText = '매매 2억 5,000만';
+
+            const hashNum = Number(id.replace(/[^0-9]/g, '')) || idx;
+
+            if (transactionType === '매매') {
+              priceValue = 18000 + (hashNum % 45) * 1000; // 1.8억 ~ 6.3억
+              priceText = `${Math.floor(priceValue / 10000) > 0 ? `${Math.floor(priceValue / 10000)}억 ` : ''}${priceValue % 10000 ? (priceValue % 10000).toLocaleString() + '만' : ''}`.trim();
+            } else if (transactionType === '전세') {
+              priceValue = 12000 + (hashNum % 30) * 1000; // 1.2억 ~ 4.2억
+              priceText = `전세 ${Math.floor(priceValue / 10000) > 0 ? `${Math.floor(priceValue / 10000)}억 ` : ''}${priceValue % 10000 ? (priceValue % 10000).toLocaleString() + '만' : ''}`.trim();
+            } else if (transactionType === '월세') {
+              priceValue = 500 + (hashNum % 6) * 500; // 500만 ~ 3,000만
+              rentValue = 40 + (hashNum % 7) * 5; // 40만 ~ 70만
+              priceText = `보증금 ${priceValue.toLocaleString()} / 월 ${rentValue}만`;
+            }
+
+            // 4. Pyong size based on category
+            let pyongValue = 34;
+            if (category === '아파트 오피스텔') pyongValue = 24 + (hashNum % 3) * 5;
+            else if (category === '원룸 투룸') pyongValue = 8 + (hashNum % 3) * 4;
+            else if (category === '주택 빌라') pyongValue = 18 + (hashNum % 4) * 6;
+            else if (category === '상가/공장/토지') pyongValue = 15 + (hashNum % 5) * 20;
+            else if (category === '분양권') pyongValue = 25 + (hashNum % 2) * 9;
+
+            // 5. Unsplash image
+            const APT_IMAGES = [
+              'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80',
+              'https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=600&q=80',
+              'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80'
+            ];
+            const ROOM_IMAGES = [
+              'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
+              'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80'
+            ];
+            const VILLA_IMAGES = [
+              'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=600&q=80',
+              'https://images.unsplash.com/photo-1564013799915-ab600027ffc6?auto=format&fit=crop&w=600&q=80'
+            ];
+            const LAND_IMAGES = [
+              'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80',
+              'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=600&q=80'
+            ];
+
+            let imageUrl = APT_IMAGES[0];
+            if (category === '아파트 오피스텔') imageUrl = APT_IMAGES[hashNum % APT_IMAGES.length];
+            else if (category === '원룸 투룸') imageUrl = ROOM_IMAGES[hashNum % ROOM_IMAGES.length];
+            else if (category === '주택 빌라') imageUrl = VILLA_IMAGES[hashNum % VILLA_IMAGES.length];
+            else if (category === '상가/공장/토지') imageUrl = LAND_IMAGES[hashNum % LAND_IMAGES.length];
+
+            // 6. Coordinates
+            const latOffset = ((hashNum % 40) - 20) / 1200;
+            const lngOffset = ((hashNum % 40) - 20) / 1200;
+            const mapLat = 35.1535 + latOffset;
+            const mapLng = 129.0185 + lngOffset;
+
+            const tags = category === '아파트 오피스텔' ? ['역세권', '대단지', '일조권우수', '초품아'] :
+                         category === '원룸 투룸' ? ['풀옵션', '초역세권', '단기임대협의', '즉시입주'] :
+                         category === '주택 빌라' ? ['상태최상', '인테리어굿', '조용한입지', '구조넓음'] :
+                         category === '분양권' ? ['구조최상', '로얄층확보', '브랜드단지', '프리미엄'] :
+                         ['진입로양호', '권리금없음', '대로변인접', '다용도추천'];
+
+            const useYearValue = 2012 + (hashNum % 13);
+
+            return {
+              id,
+              name: city || `${category} 추천매물`,
+              category,
+              transactionType,
+              priceText,
+              priceValue,
+              rentValue: rentValue > 0 ? rentValue : undefined,
+              pyongValue,
+              floorText: category === '상가/공장/토지' ? '토지 및 상가' : `${(hashNum % 12) + 2}층 / ${(hashNum % 15) + 15}층`,
+              direction: ['남향', '남서향', '남동향', '동향', '서향'][hashNum % 5],
+              location: city.includes('부산') ? city : `부산광역시 부산진구 ${city || '범천동'}`,
+              useYearText: `${useYearValue}년 준공`,
+              useYearValue,
+              householdsCount: category === '아파트 오피스텔' ? 150 + (hashNum % 8) * 120 : 0,
+              imageUrl,
+              tags,
+              description: `${city} 위치한 ${category} (${transactionType}) 최상급 추천 매물입니다. 교통 생활권 입지가 아주 우수합니다.`,
+              features: [
+                '실측 및 소유주 확인 완료 상태 특급 매물',
+                '인근 지하철 및 버스 정류장 도보 이동 가능',
+                '내부 채광 상태 양호 및 공실 즉시 입주 협의',
+                'bugang 중개사 특별 제휴 우수 전속 관리 중'
+              ],
+              mapLat,
+              mapLng
+            };
+          });
+
+          const filteredMapped = mapped.filter(item => item.name && item.name.trim() !== '');
+          if (filteredMapped.length > 0) {
+            setProperties(filteredMapped);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching properties:', err);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Capture div with id=capture-area-{propertyId} as image and download
+  const handleSaveAsImage = async (propertyId: string) => {
+    const cardElement = document.getElementById(`capture-area-${propertyId}`);
+    if (!cardElement) return;
+
+    try {
+      const canvas = await html2canvas(cardElement, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 2,
+        backgroundColor: '#ffffff'
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `property_${propertyId}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Error rendering card to image node:', error);
+    }
+  };
 
   // Persists Favorites
   useEffect(() => {
@@ -285,19 +499,28 @@ export default function App() {
   }, [favorites]);
 
   // Handle Tab Switch
-  const handleNavClick = (tabName: '매물검색' | '분양권' | '공장/토지' | '오시는길', sectionId?: string) => {
+  const handleNavClick = (
+    tabName: '매물검색' | '아파트 오피스텔' | '분양권' | '원룸 투룸' | '주택 빌라' | '상가 공장 토지' | '오시는길' | '매물접수',
+    sectionId?: string
+  ) => {
     setActiveTab(tabName);
     
     // Auto configure category filters based on Top Navbar selections
-    if (tabName === '매물검색') {
-      setSelectedCategory('아파트・오피스텔');
-      setActiveSubPills(['아파트', '오피스텔']);
+    if (tabName === '매물검색' || tabName === '아파트 오피스텔') {
+      setSelectedCategory('아파트 오피스텔');
+      setActiveSubPills(['아파트 오피스텔']);
     } else if (tabName === '분양권') {
       setSelectedCategory('분양권');
       setActiveSubPills(['분양권']);
-    } else if (tabName === '공장/토지') {
-      setSelectedCategory('공장・토지');
-      setActiveSubPills(['공장/토지']);
+    } else if (tabName === '원룸 투룸') {
+      setSelectedCategory('원룸 투룸');
+      setActiveSubPills(['원룸 투룸']);
+    } else if (tabName === '주택 빌라') {
+      setSelectedCategory('주택 빌라');
+      setActiveSubPills(['주택 빌라']);
+    } else if (tabName === '상가 공장 토지') {
+      setSelectedCategory('상가 공장 토지');
+      setActiveSubPills(['상가/공장/토지']);
     }
 
     if (sectionId) {
@@ -322,7 +545,7 @@ export default function App() {
   };
 
   // Quick Presets Selector Action
-  const applyPresetFilter = (category: '아파트' | '오피스텔' | '분양권' | '공장/토지', transaction: TransactionType) => {
+  const applyPresetFilter = (category: '아파트 오피스텔' | '원룸 투룸' | '분양권' | '상가 공장 토지' | '주택 빌라', transaction: TransactionType) => {
     setSearchQuery('');
     setAdvancedSearch(false);
     setSelectedTransaction(transaction);
@@ -331,22 +554,26 @@ export default function App() {
     setUseYear('전체');
     setHouseholdCount('전체');
     
-    if (category === '아파트') {
-      setSelectedCategory('아파트・오피스텔');
-      setActiveSubPills(['아파트']);
+    if (category === '아파트 오피스텔') {
+      setSelectedCategory('아파트 오피스텔');
+      setActiveSubPills(['아파트 오피스텔']);
       setActiveTab('매물검색');
-    } else if (category === '오피스텔') {
-      setSelectedCategory('아파트・오피스텔');
-      setActiveSubPills(['오피스텔']);
+    } else if (category === '원룸 투룸') {
+      setSelectedCategory('원룸 투룸');
+      setActiveSubPills(['원룸 투룸']);
       setActiveTab('매물검색');
     } else if (category === '분양권') {
       setSelectedCategory('분양권');
       setActiveSubPills(['분양권']);
       setActiveTab('분양권');
-    } else if (category === '공장/토지') {
-      setSelectedCategory('공장・토지');
-      setActiveSubPills(['공장/토지']);
+    } else if (category === '상가 공장 토지') {
+      setSelectedCategory('상가 공장 토지');
+      setActiveSubPills(['상가/공장/토지']);
       setActiveTab('공장/토지');
+    } else if (category === '주택 빌라') {
+      setSelectedCategory('주택 빌라');
+      setActiveSubPills(['주택 빌라']);
+      setActiveTab('매물검색');
     }
 
     setTimeout(() => {
@@ -418,23 +645,19 @@ export default function App() {
   // ==========================================
   
   const filteredProperties = useMemo(() => {
-    return INITIAL_PROPERTIES.filter(prop => {
+    return properties.filter(prop => {
       
       // 1. Primary Category Filter System (Left sidebar or Top Categories)
-      if (selectedCategory === '아파트・오피스텔') {
-        const matchingSub = activeSubPills.includes(prop.category);
-        if (!matchingSub) return false;
+      if (selectedCategory === '아파트 오피스텔') {
+        if (prop.category !== '아파트 오피스텔') return false;
       } else if (selectedCategory === '분양권') {
         if (prop.category !== '분양권') return false;
-      } else if (selectedCategory === '공장・토지') {
-        if (prop.category !== '공장/토지') return false;
-      } else if (selectedCategory === '상가・사무실') {
-        if (prop.category !== '상가/사무실') return false;
-      } else if (selectedCategory === 'MY관심') {
-        if (!favorites.includes(prop.id)) return false;
-      } else if (selectedCategory === '우리집') {
-        // Our home category matches local high-household apartments as a placeholder
-        if (prop.category !== '아파트') return false;
+      } else if (selectedCategory === '원룸 투룸') {
+        if (prop.category !== '원룸 투룸') return false;
+      } else if (selectedCategory === '주택 빌라') {
+        if (prop.category !== '주택 빌라') return false;
+      } else if (selectedCategory === '상가 공장 토지') {
+        if (prop.category !== '상가/공장/토지') return false;
       }
 
       // 2. Transaction Type Filter
@@ -494,7 +717,7 @@ export default function App() {
 
       return true;
     });
-  }, [selectedCategory, activeSubPills, selectedTransaction, priceLimit, sizeRange, useYear, householdCount, searchQuery, favorites]);
+  }, [properties, selectedCategory, activeSubPills, selectedTransaction, priceLimit, sizeRange, useYear, householdCount, searchQuery, favorites]);
 
   return (
     <div className="min-h-screen bg-amber-50/10 text-slate-800 font-sans selection:bg-amber-100 antialiased flex flex-col justify-between overflow-x-hidden">
@@ -526,19 +749,23 @@ export default function App() {
             </div>
 
             {/* Desktop Navigation Menus */}
-            <nav className="hidden md:flex items-center gap-1.5" id="desktop-nav-menus">
+            <nav className="hidden md:flex items-center gap-0.5 lg:gap-1" id="desktop-nav-menus">
               {[
                 { name: '매물검색', id: 'listings-section' },
+                { name: '아파트 오피스텔', id: 'listings-section' },
                 { name: '분양권', id: 'listings-section' },
-                { name: '공장/토지', id: 'listings-section' },
-                { name: '오시는길', id: 'map-section' }
+                { name: '원룸 투룸', id: 'listings-section' },
+                { name: '주택 빌라', id: 'listings-section' },
+                { name: '상가 공장 토지', id: 'listings-section' },
+                { name: '오시는길', id: 'map-section' },
+                { name: '매물접수', id: 'inquiry-section' }
               ].map((menu) => {
                 const isSelected = activeTab === menu.name;
                 return (
                   <button
                     key={menu.name}
                     onClick={() => handleNavClick(menu.name as any, menu.id)}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-extrabold tracking-tight transition-all duration-200 cursor-pointer ${
+                    className={`relative px-1.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-extrabold tracking-tight transition-all duration-200 cursor-pointer ${
                       isSelected 
                         ? 'text-amber-700 bg-amber-100/65' 
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
@@ -619,7 +846,7 @@ export default function App() {
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => {
-                      setSelectedCategory('아파트・오피스텔');
+                      setSelectedCategory('아파트 오피스텔');
                       handleNavClick('매물검색', 'listings-section');
                       setIsMobileMenuOpen(false);
                     }}
@@ -631,8 +858,20 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => {
+                      applyPresetFilter('아파트 오피스텔', '전체');
+                      handleNavClick('아파트 오피스텔', 'listings-section');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
+                      activeTab === '아파트 오피스텔' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    아파트 오피스텔
+                  </button>
+                  <button
+                    onClick={() => {
                       applyPresetFilter('분양권', '전체');
-                      setActiveTab('분양권');
+                      handleNavClick('분양권', 'listings-section');
                       setIsMobileMenuOpen(false);
                     }}
                     className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
@@ -643,15 +882,39 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => {
-                      applyPresetFilter('공장/토지', '전체');
-                      setActiveTab('공장/토지');
+                      applyPresetFilter('원룸 투룸', '전체');
+                      handleNavClick('원룸 투룸', 'listings-section');
                       setIsMobileMenuOpen(false);
                     }}
                     className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
-                      activeTab === '공장/토지' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
+                      activeTab === '원룸 투룸' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    공장/토지
+                    원룸 투룸
+                  </button>
+                  <button
+                    onClick={() => {
+                      applyPresetFilter('주택 빌라', '전체');
+                      handleNavClick('주택 빌라', 'listings-section');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
+                      activeTab === '주택 빌라' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    주택 빌라
+                  </button>
+                  <button
+                    onClick={() => {
+                      applyPresetFilter('상가 공장 토지', '전체');
+                      handleNavClick('상가 공장 토지', 'listings-section');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
+                      activeTab === '상가 공장 토지' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    상가 공장 토지
                   </button>
                   <button
                     onClick={() => {
@@ -663,6 +926,17 @@ export default function App() {
                     }`}
                   >
                     오시는길
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleNavClick('매물접수', 'inquiry-section');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-bold text-sm ${
+                      activeTab === '매물접수' ? 'bg-amber-50 text-amber-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    매물접수
                   </button>
                 </div>
               </div>
@@ -728,26 +1002,27 @@ export default function App() {
               {/* Category selector row */}
               <div className="flex flex-wrap items-center gap-1.5 border-b border-amber-150/40 pb-3" id="naver-main-categories">
                 {[
-                  { label: '아파트・오피', value: '아파트・오피스텔' },
+                  { label: '아파트・오피스텔', value: '아파트 오피스텔' },
                   { label: '분양권', value: '분양권' },
-                  { label: '공장・토지', value: '공장・토지' },
-                  { label: '상가・사무실', value: '상가・사무실' },
-                  { label: '우리집 시세', value: '우리집' },
-                  { label: '관심 매물 ♥', value: 'MY관심' }
+                  { label: '원룸・투룸', value: '원룸 투룸' },
+                  { label: '주택・빌라', value: '주택 빌라' },
+                  { label: '상가・공장・토지', value: '상가 공장 토지' }
                 ].map((cat) => (
                   <button
                     key={cat.value}
                     onClick={() => {
                       setSelectedCategory(cat.value as FilterCategory);
                       // Auto-init subpills
-                      if (cat.value === '아파트・오피스텔') {
-                        setActiveSubPills(['아파트', '오피스텔']);
+                      if (cat.value === '아파트 오피스텔') {
+                        setActiveSubPills(['아파트 오피스텔']);
+                      } else if (cat.value === '원룸 투룸') {
+                        setActiveSubPills(['원룸 투룸']);
                       } else if (cat.value === '분양권') {
                         setActiveSubPills(['분양권']);
-                      } else if (cat.value === '공장・토지') {
-                        setActiveSubPills(['공장/토지']);
-                      } else if (cat.value === '상가・사무실') {
-                        setActiveSubPills(['상가/사무실']);
+                      } else if (cat.value === '주택 빌라') {
+                        setActiveSubPills(['주택 빌라']);
+                      } else if (cat.value === '상가 공장 토지') {
+                        setActiveSubPills(['상가/공장/토지']);
                       }
                     }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -757,47 +1032,9 @@ export default function App() {
                     }`}
                   >
                     {cat.label}
-                    {cat.value === 'MY관심' && favorites.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[9px] font-bold">
-                        {favorites.length}
-                      </span>
-                    )}
                   </button>
                 ))}
               </div>
-
-              {/* Sub-Pills Selector (Visible ONLY for 아파트・오피스텔 Category) */}
-              <AnimatePresence>
-                {selectedCategory === '아파트・오피스텔' && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex flex-wrap items-center gap-1.5 bg-amber-50/40 p-2 rounded-xl border border-amber-100/50"
-                  >
-                    {[
-                      { l: '아파트 단지', v: '아파트' },
-                      { l: '오피스텔', v: '오피스텔' }
-                    ].map(sub => {
-                      const isActive = activeSubPills.includes(sub.v);
-                      return (
-                        <button
-                          key={sub.v}
-                          onClick={() => toggleSubPill(sub.v)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-tight transition-all cursor-pointer ${
-                            isActive 
-                              ? 'bg-amber-100 border border-amber-300 text-amber-800' 
-                              : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="mr-1">{isActive ? '✓' : '+'}</span>
-                          {sub.l}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
               {/* Transaction & Price & Size dropbar */}
               <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-6 gap-2" id="naver-dropdowns-bar">
@@ -1062,26 +1299,16 @@ export default function App() {
                 )}
               </AnimatePresence>
 
-              {/* Guidance alerts when select specific categories */}
-              {selectedCategory === 'MY관심' && (
-                <div className="bg-amber-50/50 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-800 font-bold leading-relaxed">
-                  💡 매물 목록 카드 우측 상단이나 상세에서 하트(♥) 버튼을 선택해 저장한 관심 매물만을 수시 확인하실 수 있습니다.
-                </div>
-              )}
-              {selectedCategory === '우리집' && (
-                <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3 text-xs text-amber-850 font-bold leading-relaxed">
-                  🏡 보유하고 계신 부강 지역 아파트/주택 단지 시세를 부강 공인 대표가 맞춤 대조하여 직접 상담 및 중개 처리를 안전하게 도와드립니다.
-                </div>
-              )}
+
 
               {/* Reset active filtering controllers */}
-              {(selectedCategory !== '아파트・오피스텔' || selectedTransaction !== '전체' || priceLimit !== '전체' || sizeRange !== '전체' || useYear !== '전체' || householdCount !== '전체' || searchQuery !== '') && (
+              {(selectedCategory !== '아파트 오피스텔' || selectedTransaction !== '전체' || priceLimit !== '전체' || sizeRange !== '전체' || useYear !== '전체' || householdCount !== '전체' || searchQuery !== '') && (
                 <div className="flex justify-between items-center pt-2.5 border-t border-amber-100 text-xs">
                   <span className="text-slate-400 font-extrabold">네이버 부동산 스타일의 필터링이 가동 중입니다.</span>
                   <button 
                     onClick={() => {
-                      setSelectedCategory('아파트・오피스텔');
-                      setActiveSubPills(['아파트', '오피스텔']);
+                      setSelectedCategory('아파트 오피스텔');
+                      setActiveSubPills(['아파트 오피스텔']);
                       setSelectedTransaction('전체');
                       setPriceLimit('전체');
                       setSizeRange('전체');
@@ -1114,19 +1341,19 @@ export default function App() {
             빠른 탐색:
           </span>
           <button 
-            onClick={() => applyPresetFilter('아파트', '매매')}
+            onClick={() => applyPresetFilter('아파트 오피스텔', '매매')}
             className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
           >
-            아파트 매매
+            아파트・오피스텔 매매
           </button>
           <button 
-            onClick={() => applyPresetFilter('아파트', '전세')}
+            onClick={() => applyPresetFilter('아파트 오피스텔', '전세')}
             className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
           >
-            아파트 전세
+            아파트・오피스텔 전세
           </button>
           <button 
-            onClick={() => applyPresetFilter('오피스텔', '월세')}
+            onClick={() => applyPresetFilter('원룸 투룸', '월세')}
             className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
           >
             역세권 오피스텔 월세
@@ -1138,7 +1365,7 @@ export default function App() {
             양정 신축 분양권
           </button>
           <button 
-            onClick={() => applyPresetFilter('공장/토지', '전체')}
+            onClick={() => applyPresetFilter('상가 공장 토지', '전체')}
             className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
           >
             공장/토지 개발매물
@@ -1188,8 +1415,8 @@ export default function App() {
                 </span>
                 <button 
                   onClick={() => {
-                    setSelectedCategory('아파트・오피스텔');
-                    setActiveSubPills(['아파트', '오피스텔']);
+                    setSelectedCategory('아파트 오피스텔');
+                    setActiveSubPills(['아파트 오피스텔']);
                     setSelectedTransaction('전체');
                     setPriceLimit('전체');
                     setSizeRange('전체');
@@ -1204,8 +1431,8 @@ export default function App() {
               </motion.div>
             )}
 
-            {/* Results Listings Grid (2 Column standard, responsive) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Results Listings Grid (Mobile 1 column, PC 3 columns) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <AnimatePresence mode="popLayout">
                 {filteredProperties.map((prop, index) => {
                   const isFavorite = favorites.includes(prop.id);
@@ -1220,88 +1447,105 @@ export default function App() {
                       className="group bg-white rounded-2xl border border-amber-200/50 shadow-xs hover:shadow-md hover:border-amber-400/35 overflow-hidden transition-all duration-200 flex flex-col justify-between"
                       id={`property-card-${prop.id}`}
                     >
-                      <div className="relative">
-                        {/* Property Image & Hover scale */}
-                        <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
-                          <img 
-                            src={prop.imageUrl} 
-                            alt={prop.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-95" />
-                          
-                          {/* Heart Favorite button absolute top */}
-                          <button
-                            onClick={(e) => toggleFavorite(prop.id, e)}
-                            className="absolute right-3.5 top-3.5 p-2 rounded-full bg-white/80 backdrop-blur-xs text-slate-700 hover:text-red-500 hover:bg-white transition-all shadow-xs cursor-pointer z-10"
-                            title="관심 매물 등록"
-                          >
-                            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
-                          </button>
+                      {/* Capture Area Div for html2canvas downloading */}
+                      <div id={`capture-area-${prop.id}`} className="bg-white p-2">
+                        <div className="relative rounded-xl overflow-hidden bg-white">
+                          {/* Property Image & Hover scale */}
+                          <div className="relative aspect-video w-full overflow-hidden bg-slate-100 rounded-lg">
+                            <img 
+                              src={prop.imageUrl} 
+                              alt={prop.name}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-95" />
+                            
+                            {/* Heart Favorite button absolute top */}
+                            <button
+                              onClick={(e) => toggleFavorite(prop.id, e)}
+                              className="absolute right-3.5 top-3.5 p-2 rounded-full bg-white/80 backdrop-blur-xs text-slate-700 hover:text-red-500 hover:bg-white transition-all shadow-xs cursor-pointer z-10"
+                              title="관심 매물 등록"
+                            >
+                              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
+                            </button>
 
-                          {/* Dynamic transaction Category badge */}
-                          <div className="absolute left-3.5 bottom-3.5 flex flex-col gap-1 items-start">
-                            <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
-                              {prop.category}
-                            </span>
-                            <span className="text-white text-base sm:text-lg font-black tracking-tight drop-shadow-sm/85">
-                              {prop.transactionType} {prop.priceText}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Card Contents */}
-                        <div className="p-4 sm:p-5">
-                          {/* Tags block */}
-                          <div className="flex flex-wrap gap-1 mb-2.5">
-                            {prop.tags.map((tag) => (
-                              <span key={tag} className="bg-amber-100/50 text-amber-900 border border-amber-200/30 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md">
-                                #{tag}
+                            {/* Dynamic transaction Category badge */}
+                            <div className="absolute left-3.5 bottom-3.5 flex flex-col gap-1 items-start">
+                              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                {prop.category}
                               </span>
-                            ))}
-                          </div>
-
-                          <h3 className="text-sm sm:text-base font-extrabold text-slate-900 mb-2 group-hover:text-amber-600 transition-colors tracking-tight">
-                            {prop.name}
-                          </h3>
-
-                          {/* Detail Grid values */}
-                          <div className="grid grid-cols-2 gap-y-2 gap-x-4 border-t border-slate-50 pt-3 text-xs text-slate-500 font-semibold mb-3">
-                            <div className="flex items-center gap-1.5 uppercase">
-                              <span className="text-[10px] font-black text-amber-500">■</span>
-                              <span>면적(평형): <strong className="text-slate-800">{prop.pyongValue}평</strong></span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-black text-amber-500">■</span>
-                              <span>연식: <strong className="text-slate-800">{prop.useYearValue}년</strong></span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-black text-amber-500">■</span>
-                              <span>층수/방향: <strong className="text-slate-800">{prop.floorText.split('/')[0]} / {prop.direction}</strong></span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-black text-amber-500">■</span>
-                              <span>동호수 세대수: <strong className="text-slate-800">{prop.householdsCount > 0 ? `${prop.householdsCount}세대` : '단독형'}</strong></span>
+                              <span className="text-white text-sm sm:text-base font-black tracking-tight drop-shadow-sm/85">
+                                {prop.transactionType} {prop.priceText}
+                              </span>
                             </div>
                           </div>
 
-                          {/* Address Info */}
-                          <p className="text-[11px] text-slate-400 font-bold flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                            <span>{prop.location}</span>
-                          </p>
+                          {/* Card Contents */}
+                          <div className="p-3">
+                            {/* Tags block */}
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {prop.tags.map((tag) => (
+                                <span key={tag} className="bg-amber-100/50 text-amber-900 border border-amber-200/30 text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 mb-1.5 group-hover:text-amber-600 transition-colors tracking-tight line-clamp-1">
+                              {prop.name}
+                            </h3>
+
+                            {/* Detail Grid values */}
+                            <div className="grid grid-cols-2 gap-y-1.5 gap-x-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 font-semibold mb-2">
+                              <div className="flex items-center gap-1 uppercase">
+                                <span className="text-[9px] font-black text-amber-500">■</span>
+                                <span>면적: <strong className="text-slate-800">{prop.pyongValue}평</strong></span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-black text-amber-500">■</span>
+                                <span>연식: <strong className="text-slate-800">{prop.useYearValue}년</strong></span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-black text-amber-500">■</span>
+                                <span>층수: <strong className="text-slate-800">{prop.floorText.split('/')[0]}</strong></span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-black text-amber-500">■</span>
+                                <span>방향: <strong className="text-slate-800">{prop.direction}</strong></span>
+                              </div>
+                            </div>
+
+                            {/* Address Info */}
+                            <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span className="line-clamp-1">{prop.location}</span>
+                            </p>
+
+                            {/* Elegant brand watermark to display in downloaded images */}
+                            <div className="mt-3 pt-2.5 border-t border-dashed border-amber-200/40 flex items-center justify-between text-[9px] text-amber-800 font-bold bg-amber-50/20 px-2 py-1.5 rounded-lg opacity-80">
+                              <span className="flex items-center gap-1 text-amber-900"><Building className="w-3 h-3 text-amber-600" /> 부강 공인중개사</span>
+                              <span>T. 051-893-8959</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Detail triggers buttons */}
-                      <div className="p-4 sm:p-5 pt-0 border-t border-slate-50 flex items-center gap-2 mt-auto">
+                      {/* Detail triggers (Outside capture area) */}
+                      <div className="p-3 pt-0 border-t border-slate-50 flex items-center gap-1.5 mt-auto">
                         <button
                           onClick={() => openDetailsAndSetInquiry(prop)}
-                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black py-2.5 rounded-xl text-center flex items-center justify-center gap-1 group/btn cursor-pointer shadow-xs transition-colors"
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black py-2 rounded-xl text-center flex items-center justify-center gap-0.5 group/btn cursor-pointer shadow-xs transition-colors"
                         >
-                          <span>상세설명 및 상담</span>
+                          <span>상세상담</span>
                           <ChevronRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
+                        </button>
+                        <button
+                          onClick={() => handleSaveAsImage(prop.id)}
+                          className="bg-slate-100 hover:bg-slate-200 border border-slate-200/40 text-slate-700 text-xs font-black px-2 py-2 rounded-xl text-center flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                          title="이미지로 저장"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-slate-600" />
+                          <span>저장</span>
                         </button>
                       </div>
                     </motion.article>
@@ -1712,10 +1956,10 @@ export default function App() {
           <div className="md:col-span-3 flex flex-col gap-3">
             <span className="text-white font-black text-xs uppercase tracking-wider">전문 매물 분야 목록</span>
             <ul className="space-y-2 text-[11px] font-bold text-slate-450">
-              <li><button onClick={() => applyPresetFilter('아파트', '전체')} className="hover:text-amber-400 text-left">개금동 / 양정동 대단지 아파트</button></li>
-              <li><button onClick={() => applyPresetFilter('오피스텔', '전체')} className="hover:text-amber-400 text-left">초역세권 서면 아파텔/오피스텔</button></li>
+              <li><button onClick={() => applyPresetFilter('아파트 오피스텔', '전체')} className="hover:text-amber-400 text-left">개금동 / 양정동 대단지 아파트・오피스텔</button></li>
+              <li><button onClick={() => applyPresetFilter('원룸 투룸', '전체')} className="hover:text-amber-400 text-left">초역세권 서면 원룸/투룸/오피스텔</button></li>
               <li><button onClick={() => applyPresetFilter('분양권', '전체')} className="hover:text-amber-400 text-left">재개발/재건축 고층 브랜드 분양권</button></li>
-              <li><button onClick={() => applyPresetFilter('공장/토지', '전체')} className="hover:text-amber-400 text-left">당감동/사상지역 공업 준공업지 대지</button></li>
+              <li><button onClick={() => applyPresetFilter('상가 공장 토지', '전체')} className="hover:text-amber-400 text-left">상가 및 공장/토지 개발매물</button></li>
             </ul>
           </div>
 
