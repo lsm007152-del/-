@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* Leaflet Custom DivIcon Reset Styles */
+.custom-leaflet-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
