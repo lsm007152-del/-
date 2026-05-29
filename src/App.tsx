@@ -2290,11 +2290,11 @@ export default function App() {
       {/* ==========================================
           MAIN AREA: GRID LISTINGS & CONSULT SIDEBAR
           ========================================== */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow" id="listings-section">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <main className={`${viewMode === 'map' ? 'max-w-none w-full px-4 sm:px-6 lg:px-8 xl:px-12' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} py-8 flex-grow`} id="listings-section">
+        <div className={viewMode === 'map' ? 'flex flex-col gap-6' : 'grid grid-cols-1 lg:grid-cols-4 gap-8'}>
           
-          {/* Properties Listings Grid (3/4 column) */}
-          <div className="lg:col-span-3 flex flex-col gap-6" id="listings-container">
+          {/* Properties Listings Grid (3/4 column or full width if viewMode === 'map') */}
+          <div className={viewMode === 'map' ? 'w-full flex flex-col gap-6' : 'lg:col-span-3 flex flex-col gap-6'} id="listings-container">
             
             {/* Title / Info row with View Mode Toggles */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-amber-100 pb-3.5 gap-3">
@@ -2805,10 +2805,10 @@ export default function App() {
             {/* Results Listings Content (Conditional on viewMode: grid or map) */}
             {viewMode === 'map' ? (
               /* Map Side-by-Side Split Screen Layout (Naver Real Estate Style) */
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch bg-white rounded-3xl p-3 border border-amber-200/50 shadow-xs">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch bg-white rounded-3xl p-3 border border-amber-200/50 shadow-xs">
                 
-                {/* Left Listing Feed: Compact horizontal row items (md:col-span-5) */}
-                <div className="md:col-span-5 flex flex-col gap-3.5 max-h-[700px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                {/* Right Listing Feed: Compact horizontal row items (lg:col-span-3, order-2) */}
+                <div className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[450px] lg:max-h-[780px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                   <div className="bg-amber-50/50 text-slate-600 text-[11px] font-bold p-3 rounded-xl border border-amber-100/60 flex items-center gap-2 justify-center">
                     <Info className="w-4 h-4 text-amber-500 animate-bounce" />
                     <span>원하는 매물을 클릭하면 지도가 알아서 움직입니다.</span>
@@ -2936,8 +2936,8 @@ export default function App() {
                   </AnimatePresence>
                 </div>
 
-                {/* Right Interactive Kakao Map Panel (md:col-span-7) */}
-                <div className="md:col-span-7 h-[400px] md:h-[700px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
+                {/* Left Interactive Kakao Map Panel (lg:col-span-9, order-1) */}
+                <div className="order-1 lg:order-1 lg:col-span-9 h-[450px] lg:h-[780px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
                   {/* Map Header Diagnostics & Controls */}
                   <div className="absolute top-3 left-3 right-4 z-30 flex flex-wrap gap-2 items-center justify-between pointer-events-none">
                     {/* Left: Troubleshooting Button */}
@@ -3781,79 +3781,81 @@ export default function App() {
           </div>
 
           {/* Consultation Form Sidebar (1/4 column) */}
-          <div className="lg:col-span-1" id="inquiry-section">
-            <div className="sticky top-24 bg-white/80 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-5">
+          {viewMode !== 'map' && (
+            <div className="lg:col-span-1" id="inquiry-section">
+              <div className="sticky top-24 bg-white/80 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-5">
+                
+                <div className="border-b border-amber-100 pb-3">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base">
+                    <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
+                    <span>실시간 온라인 상담 신청</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
+                    남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
+                  </p>
+                </div>
               
-              <div className="border-b border-amber-100 pb-3">
-                <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base">
-                  <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
-                  <span>실시간 온라인 상담 신청</span>
+                {/* Instant Status Counter */}
+                <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+    
+    <input
+      type="text"
+      placeholder="성함"
+      value={consultName}
+      onChange={(e) => setConsultName(e.target.value)}
+      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+    />
+
+    <input
+      type="tel"
+      placeholder="연락처"
+      value={consultPhone}
+      onChange={(e) => setConsultPhone(e.target.value)}
+      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+    />
+
+    <select
+      value={consultType}
+      onChange={(e) => setConsultType(e.target.value)}
+      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+    >
+      <option value="매수문의">매수 문의</option>
+      <option value="매도문의">매도 문의</option>
+      <option value="매물접수">매물 접수</option>
+      <option value="상담문의">일반 상담</option>
+    </select>
+
+    <textarea
+      placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+      value={consultText}
+      onChange={(e) => setConsultText(e.target.value)}
+      rows={5}
+      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+    />
+
+    <button
+      type="submit"
+      className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition-colors"
+    >
+      상담 신청 보내기
+    </button>
+
+  </form>
+                <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100 flex items-center justify-between text-center">
+                  <div className="flex-1">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+                    <div className="text-sm font-black text-slate-800">14건</div>
+                  </div>
+                  <div className="w-px h-8 bg-slate-200" />
+                  <div className="flex-1">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+                    <div className="text-sm font-black text-amber-600">30분 내</div>
+                  </div>
                 </div>
-                <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
-                  남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
-                </p>
+
               </div>
-            
-              {/* Instant Status Counter */}
-              <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
-  
-  <input
-    type="text"
-    placeholder="성함"
-    value={consultName}
-    onChange={(e) => setConsultName(e.target.value)}
-    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-  />
-
-  <input
-    type="tel"
-    placeholder="연락처"
-    value={consultPhone}
-    onChange={(e) => setConsultPhone(e.target.value)}
-    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-  />
-
-  <select
-    value={consultType}
-    onChange={(e) => setConsultType(e.target.value)}
-    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-  >
-    <option value="매수문의">매수 문의</option>
-    <option value="매도문의">매도 문의</option>
-    <option value="매물접수">매물 접수</option>
-    <option value="상담문의">일반 상담</option>
-  </select>
-
-  <textarea
-    placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-    value={consultText}
-    onChange={(e) => setConsultText(e.target.value)}
-    rows={5}
-    className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-  />
-
-  <button
-    type="submit"
-    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition-colors"
-  >
-    상담 신청 보내기
-  </button>
-
-</form>
-              <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100 flex items-center justify-between text-center">
-                <div className="flex-1">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-                  <div className="text-sm font-black text-slate-800">14건</div>
-                </div>
-                <div className="w-px h-8 bg-slate-200" />
-                <div className="flex-1">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-                  <div className="text-sm font-black text-amber-600">30분 내</div>
-                </div>
-              </div>
-
             </div>
-          </div>
+          )}
 
         </div>
       </main>
@@ -3970,14 +3972,14 @@ export default function App() {
                   <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center p-1 font-black text-slate-950">
                     ★
                   </div>
-                  <span className="font-black text-slate-950 text-base sm:text-lg">사무소 핵심 개요</span>
+                  <span className="font-black text-slate-950 text-base sm:text-lg">중개사무소 정보</span>
                 </div>
 
                 <div className="flex flex-col gap-4 text-xs font-semibold">
                   
                   {/* Address */}
                   <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 font-extrabold">사무실 대표 도로명 소재지</span>
+                    <span className="text-slate-400 font-extrabold">사무실 소재지</span>
                     <p className="text-slate-800 text-sm font-black flex items-start gap-1">
                       <MapPin className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                       <span>부산광역시 부산진구 냉정로 273 1층 (부강 부동산)</span>
@@ -3986,27 +3988,47 @@ export default function App() {
 
                   {/* Representative name */}
                   <div className="flex flex-col gap-1 mt-1">
-                    <span className="text-slate-400 font-extrabold">소속 대표 공인중개사</span>
+                    <span className="text-slate-400 font-extrabold">대표</span>
                     <p className="text-slate-800 text-sm font-black flex items-center gap-1">
                       <Home className="w-4 h-4 text-amber-500" />
-                      <span>대표 고민주 소장</span>
+                      <span>고민주</span>
                     </p>
                   </div>
 
-                  {/* Contacts */}
-                  <div className="flex flex-col gap-2 mt-2 pt-3 border-t border-amber-200/20">
-                    <div className="flex items-center justify-between text-slate-700">
-                      <span>대표 유선 전화:</span>
-                      <a href="tel:051-897-8900" className="font-black text-amber-600 hover:underline">051-897-8900</a>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-700">
-                      <span>팩스 연락처:</span>
-                      <span className="font-black text-slate-900">051-897-9004</span>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-700">
-                      <span>대표 이메일 주소:</span>
-                      <a href="mailto:junku97@naver.com" className="font-black text-slate-900 hover:underline">junku97@naver.com</a>
-                    </div>
+                  {/* Registration Number */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <span className="text-slate-400 font-extrabold">등록번호</span>
+                    <p className="text-slate-800 text-sm font-black flex items-center gap-1">
+                      <FileText className="w-4 h-4 text-amber-500 animate-pulse" />
+                      <span>제26230-2025-00053호</span>
+                    </p>
+                  </div>
+
+                  {/* Telephone */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <span className="text-slate-400 font-extrabold">대표 유선 전화</span>
+                    <p className="text-slate-800 text-sm font-black flex items-center gap-1">
+                      <Phone className="w-4 h-4 text-amber-500" />
+                      <a href="tel:051-897-8900" className="text-amber-600 hover:underline">051-897-8900</a>
+                    </p>
+                  </div>
+
+                  {/* Fax */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <span className="text-slate-400 font-extrabold">팩스 연락처</span>
+                    <p className="text-slate-800 text-sm font-black flex items-center gap-1">
+                      <Printer className="w-4 h-4 text-amber-500" />
+                      <span>051-897-9004</span>
+                    </p>
+                  </div>
+
+                  {/* Email */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <span className="text-slate-400 font-extrabold">대표 이메일 주소</span>
+                    <p className="text-slate-800 text-sm font-black flex items-center gap-1">
+                      <Mail className="w-4 h-4 text-amber-500" />
+                      <a href="mailto:junku97@naver.com" className="text-slate-900 hover:underline">junku97@naver.com</a>
+                    </p>
                   </div>
 
                 </div>
