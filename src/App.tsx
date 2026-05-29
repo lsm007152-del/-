@@ -27,6 +27,7 @@ import {
   Lock,
   Plus,
   Trash2,
+  RefreshCw,
   Map as MapIcon,
   LayoutGrid,
   ListCollapse
@@ -470,12 +471,12 @@ export default function App() {
   });
 
   const [properties, setProperties] = useState<Property[]>(() => {
-    const saved = localStorage.getItem('bugang_properties');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('bugang_properties');
+      if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Perform automatic correction for prop-1 and/or any property with '개금 현대아이파크 아파트' or '냉정로 273' to make sure they get updated coordinates
+          console.log(`[Storage Loader] Successfully resolved ${parsed.length} items from localStorage cache.`);
           return parsed.map(prop => {
             let lat = Number(prop.latitude !== undefined ? prop.latitude : prop.mapLat || 35.151261);
             let lng = Number(prop.longitude !== undefined ? prop.longitude : prop.mapLng || 129.029706);
@@ -501,12 +502,12 @@ export default function App() {
             };
           });
         }
-      } catch (e: any) {
-        console.error('Error parsing loaded properties:', e?.message || String(e));
       }
+    } catch (e: any) {
+      console.error('[Storage Loader Warning] LocalStorage load failed, defaulting to setup list:', e?.message || String(e));
     }
-    
-    // Default INITIAL_PROPERTIES fallback mapping to guarantee both fields exist as correct numbers
+
+    console.log('[Storage Loader] Initializing state with default physical mock pre-populated values.');
     return INITIAL_PROPERTIES.map(prop => {
       const lat = Number((prop as any).latitude || prop.mapLat || 35.151261);
       const lng = Number((prop as any).longitude || prop.mapLng || 129.029706);
@@ -522,7 +523,12 @@ export default function App() {
 
   // Save properties to localStorage when altered
   useEffect(() => {
-    localStorage.setItem('bugang_properties', JSON.stringify(properties));
+    try {
+      localStorage.setItem('bugang_properties', JSON.stringify(properties));
+      console.log(`[Storage Synchronizer] Written ${properties.length} item records cleanly to browser secure localStorage.`);
+    } catch (e: any) {
+      console.error('[Storage Synchronizer Error] Failed to commit changes to localStorage:', e?.message || String(e));
+    }
   }, [properties]);
 
   const [syncCount, setSyncCount] = useState<number>(0);
@@ -633,6 +639,43 @@ export default function App() {
     // 3. Inform user clearly
     triggerNotification('🗑️ 매물이 전산 목록에서 영구적으로 완전히 삭제 처리되었습니다.');
     setDeletePropertyId(null);
+  };
+
+  const handleResetLocalStorage = () => {
+    const confirmReset = window.confirm(
+      "🔄 [부강 대표전산 원상복구]\n\n정말 로컬스토리지 데이터를 원상복구하시겠습니까?\n모든 수동 복사/삭제/추가된 매물 일체와 커스텀 변경 기록이 영구 폐기되며, 부강부동산 원본 기본 전산망 리스트로 즉각 안전하게 원복됩니다."
+    );
+    if (confirmReset) {
+      try {
+        localStorage.removeItem('bugang_properties');
+        localStorage.removeItem('bugang_favorites');
+        
+        // Build clear fallback list
+        const resetList = INITIAL_PROPERTIES.map(prop => {
+          const lat = Number((prop as any).latitude || prop.mapLat || 35.151261);
+          const lng = Number((prop as any).longitude || prop.mapLng || 129.029706);
+          return {
+            ...prop,
+            latitude: lat,
+            longitude: lng,
+            mapLat: lat,
+            mapLng: lng
+          };
+        });
+        
+        setProperties(resetList);
+        setActiveMarkerId(null);
+        setSelectedProperty(null);
+        setHoveredPropertyId(null);
+        setFavorites([]);
+        setMapCenter({ lat: 35.151261, lng: 129.029706 });
+        
+        triggerNotification('🔄 전산 정상화 완료: 브라우저 캐시 및 매물 대장이 부강 기본 설정으로 깨끗하게 초기화 복원되었습니다.');
+      } catch (err: any) {
+        console.error('Reset local storage failed:', err?.message || String(err));
+        triggerNotification('❌ 로컬스토리지 초기화 실행 중 기술 오류가 발생했습니다.');
+      }
+    }
   };
 
   const handleGeocodeAddress = () => {
@@ -2038,13 +2081,25 @@ export default function App() {
                       매물장에 땡겨오며 발생하던 동기화 지연/오류 없이, 브라우저가 관리하는 수동 매물장입니다.
                     </p>
                   </div>
-                  <button
-                    onClick={() => setShowAddForm(!showAddForm)}
-                    className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>{showAddForm ? '등록 폼 접기' : '새 매물 직접 등록하기'}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={handleResetLocalStorage}
+                      className="bg-amber-100 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      title="모든 로컬 변경사항을 삭제하고 부강 최신 원본 매물 대장 리스트로 복구합니다."
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-amber-800" />
+                      <span>기본 전산 복구 (초기화)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(!showAddForm)}
+                      className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{showAddForm ? '등록 폼 접기' : '새 매물 직접 등록하기'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {showAddForm && (
