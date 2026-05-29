@@ -473,14 +473,16 @@ export default function App() {
   const [properties, setProperties] = useState<Property[]>(() => {
     try {
       const saved = localStorage.getItem('bugang_properties');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          console.log(`[Storage Loader] Successfully resolved ${parsed.length} items from localStorage cache.`);
+        if (Array.isArray(parsed)) {
+          console.log(`[Storage Loader SECURE] Successfully parsed '${parsed.length}' items from localStorage.`);
           return parsed.map(prop => {
-            let lat = Number(prop.latitude !== undefined ? prop.latitude : prop.mapLat || 35.151261);
-            let lng = Number(prop.longitude !== undefined ? prop.longitude : prop.mapLng || 129.029706);
-            if (prop.id === 'prop-1' || prop.name.includes('개금 현대') || prop.location.includes('냉정로 273') || prop.fullAddr?.includes('냉정로 273')) {
+            let lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat || 35.151261));
+            let lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng || 129.029706));
+            
+            // Fix prop-1 or and/or search strings to align mapping
+            if (prop.id === 'prop-1' || prop.name?.includes('개금 현대') || prop.location?.includes('냉정로 273') || prop.fullAddr?.includes('냉정로 273')) {
               lat = 35.151261;
               lng = 129.029706;
               return {
@@ -495,16 +497,16 @@ export default function App() {
             }
             return {
               ...prop,
-              latitude: lat,
-              longitude: lng,
-              mapLat: lat,
-              mapLng: lng
+              latitude: Number.isNaN(lat) ? 35.151261 : lat,
+              longitude: Number.isNaN(lng) ? 129.029706 : lng,
+              mapLat: Number.isNaN(lat) ? 35.151261 : lat,
+              mapLng: Number.isNaN(lng) ? 129.029706 : lng
             };
           });
         }
       }
     } catch (e: any) {
-      console.error('[Storage Loader Warning] LocalStorage load failed, defaulting to setup list:', e?.message || String(e));
+      console.error('[Storage Loader SECURE Warning] LocalStorage load failed, defaulting to setup list:', e?.message || String(e));
     }
 
     console.log('[Storage Loader] Initializing state with default physical mock pre-populated values.');
@@ -521,15 +523,48 @@ export default function App() {
     });
   });
 
-  // Save properties to localStorage when altered
+  // Save properties to localStorage when altered with deep protective filters
   useEffect(() => {
     try {
-      localStorage.setItem('bugang_properties', JSON.stringify(properties));
-      console.log(`[Storage Synchronizer] Written ${properties.length} item records cleanly to browser secure localStorage.`);
+      if (properties && Array.isArray(properties)) {
+        // High-safety validation before serializing down to disk, filtering out corrupted listings
+        const cleanToSave = properties.filter(p => p && p.id && p.name);
+        localStorage.setItem('bugang_properties', JSON.stringify(cleanToSave));
+        console.log(`[Storage Synchronizer] Written ${cleanToSave.length} clean, validated records to browser secure storage.`);
+      }
     } catch (e: any) {
       console.error('[Storage Synchronizer Error] Failed to commit changes to localStorage:', e?.message || String(e));
     }
   }, [properties]);
+
+  // Share state across multiple windows/tabs in real-time instantly without reloads
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'bugang_properties' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            console.log(`[Cross-Tab Realtime Synchronizer] Detected properties list changes in another window. Synced ${parsed.length} items.`);
+            setProperties(parsed.map(prop => {
+              const lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat || 35.151261));
+              const lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng || 129.029706));
+              return {
+                ...prop,
+                latitude: Number.isNaN(lat) ? 35.151261 : lat,
+                longitude: Number.isNaN(lng) ? 129.029706 : lng,
+                mapLat: Number.isNaN(lat) ? 35.151261 : lat,
+                mapLng: Number.isNaN(lng) ? 129.029706 : lng
+              };
+            }));
+          }
+        } catch (err) {
+          console.error('[Cross-Tab Sync Event Error] Parsing failure:', err);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const [syncCount, setSyncCount] = useState<number>(0);
 
@@ -675,6 +710,35 @@ export default function App() {
         console.error('Reset local storage failed:', err?.message || String(err));
         triggerNotification('❌ 로컬스토리지 초기화 실행 중 기술 오류가 발생했습니다.');
       }
+    }
+  };
+
+  const handleForceReloadLocalStorage = () => {
+    try {
+      const saved = localStorage.getItem('bugang_properties');
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const normalized = parsed.map(prop => {
+            const lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat !== undefined ? prop.mapLat : 35.151261));
+            const lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng !== undefined ? prop.mapLng : 129.029706));
+            return {
+              ...prop,
+              latitude: Number.isNaN(lat) ? 35.151261 : lat,
+              longitude: Number.isNaN(lng) ? 129.029706 : lng,
+              mapLat: Number.isNaN(lat) ? 35.151261 : lat,
+              mapLng: Number.isNaN(lng) ? 129.029706 : lng
+            };
+          });
+          setProperties(normalized);
+          triggerNotification(`⚡ [스토리지 강제 동기화] 브라우저 내 최신 스토리지 데이터 ${normalized.length}건을 즉각 강제 재로드했습니다.`);
+          return;
+        }
+      }
+      triggerNotification('ℹ️ 현재 브라우저 저장소에 저장되어 있는 매물 데이터가 존재하지 않습니다.');
+    } catch (e: any) {
+      console.error('Force reload localStorage failed:', e);
+      triggerNotification('❌ 브라우저 저장소 데이터를 강제 동기화하는 도중 기술 오류가 발생했습니다.');
     }
   };
 
@@ -2082,6 +2146,15 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={handleForceReloadLocalStorage}
+                      className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      title="브라우저 저장소 데이터가 오차가 생겼을 때 강제로 즉각 다시 로드합니다."
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-600 transition-transform duration-500 hover:rotate-180 active:scale-90" />
+                      <span>로컬스토리지 강제 새로고침</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleResetLocalStorage}
