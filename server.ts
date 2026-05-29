@@ -6,10 +6,41 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Initialize Firebase live database connection inside node/express server
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+import fs from "fs";
+
+let db: any = null;
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    console.log("🔥 [Server Firebase] Successfully initialized Firestore connection in Express backend.");
+  } else {
+    console.warn("⚠️ [Server Firebase] Config file firebase-applet-config.json not found.");
+  }
+} catch (err) {
+  console.error("❌ [Server Firebase] Initialization error:", err);
+}
+
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Enable CORS for API routes so third-party senders don't get blocked
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // Backup properties set near Cold Jung road (냉정로), Busanjin-gu, Busan
 const BACKUP_REALTIME_PROPERTIES = [
@@ -241,6 +272,105 @@ app.post("/api/realestate/latest", async (req, res) => {
   } catch (error) {
     console.error("❌ [API] Gemini real-time synchronization error, executing defensive fallback mechanism:", error);
     return res.json({ properties: BACKUP_REALTIME_PROPERTIES, aiSynthesized: false });
+  }
+});
+
+// Receives POST requests from Google Apps Script to insert or update properties live!
+app.post("/api/properties", async (req, res) => {
+  console.log("📥 [GAS POST API] Received a new property payload from Google Apps Script:", req.body);
+  try {
+    const rawData = req.body;
+    if (!rawData || typeof rawData !== "object") {
+      return res.status(400).json({ success: false, error: "Invalid JSON body payload." });
+    }
+
+    // Name is the only absolute must-have
+    const name = String(rawData.name || "구글 전산 등록 매물").trim();
+    const id = String(rawData.id || `gas-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+    
+    // Normalize and provide safe default values for all standard fields
+    const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(rawData.category)
+      ? rawData.category
+      : "아파트";
+    const transactionType = ["매매", "전세", "월세"].includes(rawData.transactionType)
+      ? rawData.transactionType
+      : "매매";
+    
+    const priceText = String(rawData.priceText || `${rawData.priceValue ? rawData.priceValue + '만' : '상담문의'}`);
+    const priceValue = Number(rawData.priceValue || 20000);
+    const rentValue = rawData.rentValue !== undefined ? Number(rawData.rentValue) : 0;
+    const pyongValue = Number(rawData.pyongValue || 24);
+    const floorText = String(rawData.floorText || "중층");
+    const direction = String(rawData.direction || "남동향");
+    const location = String(rawData.location || "부산광역시 부산진구 냉정로 일대");
+    const fullAddr = String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대");
+    const useYearText = String(rawData.useYearText || "2015년 준공");
+    const useYearValue = Number(rawData.useYearValue || 2015);
+    const householdsCount = Number(rawData.householdsCount || 450);
+    
+    const tags = Array.isArray(rawData.tags)
+      ? rawData.tags.map(String)
+      : ["실시간연동", "GAS등록", "추천매물"];
+      
+    const description = String(rawData.description || "Google Apps Script 전산망을 통해 안전하게 일괄 연동 등록된 매물입니다.");
+    
+    const features = Array.isArray(rawData.features)
+      ? rawData.features.map(String)
+      : ["동서대/경남정보대 인접 편리한 생활권", "교통 요충지 편리한 주차 환경", "즉시 조율 및 입주 가능"];
+
+    const latitude = Number(rawData.latitude || rawData.mapLat || 35.151261);
+    const longitude = Number(rawData.longitude || rawData.mapLng || 129.029706);
+
+    const imageUrl = String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80");
+
+    const normalizedProperty = {
+      id,
+      name,
+      category,
+      transactionType,
+      priceText,
+      priceValue,
+      rentValue,
+      pyongValue,
+      floorText,
+      direction,
+      location,
+      fullAddr,
+      useYearText,
+      useYearValue,
+      householdsCount,
+      tags,
+      description,
+      features,
+      latitude,
+      longitude,
+      mapLat: latitude,
+      mapLng: longitude,
+      imageUrl
+    };
+
+    if (!db) {
+      throw new Error("Firestore cloud database is not initialized on this server session.");
+    }
+
+    // Save directly to the properties database in Firestore!
+    const docRef = doc(db, 'properties', id);
+    await setDoc(docRef, normalizedProperty);
+
+    console.log(`✅ [GAS POST API] Successfully saved property to Firestore: ${id} (${name})`);
+    
+    return res.status(200).json({
+      success: true,
+      message: "새 매물이 성공적으로 중앙 실시간 데이터베이스(Firestore)에 등록 완료되었습니다.",
+      property: normalizedProperty
+    });
+
+  } catch (err: any) {
+    console.error("❌ [GAS POST API] Error processing payload:", err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || "Internal server error during property insertion."
+    });
   }
 });
 

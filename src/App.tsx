@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, 
   MapPin, 
@@ -443,6 +443,7 @@ export default function App() {
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 35.151261, lng: 129.029706 });
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [isKakaoLoaded, setIsKakaoLoaded] = useState<boolean>(false);
+  const isFirstLoad = useRef(true);
   const [kakaoLoadFailed, setKakaoLoadFailed] = useState<boolean>(false);
   const [kakaoErrorMsg, setKakaoErrorMsg] = useState<string>('');
   const [kakaoDiagnostics, setKakaoDiagnostics] = useState<{
@@ -590,6 +591,18 @@ export default function App() {
           });
       } else {
         const loaded: Property[] = [];
+        const newlyAddedPropNames: string[] = [];
+
+        // Check for new external additions since initial load
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' && !isFirstLoad.current) {
+            const data = change.doc.data() as Property;
+            if (data && data.name) {
+              newlyAddedPropNames.push(data.name);
+            }
+          }
+        });
+
         snapshot.forEach((d) => {
           const data = d.data() as Property;
           
@@ -612,6 +625,12 @@ export default function App() {
         
         console.log(`[Firestore Sync] Successfully synchronized ${loaded.length} properties from cloud live db.`);
         setProperties(loaded);
+
+        if (newlyAddedPropNames.length > 0) {
+          triggerNotification(`📢 [전산 실시간 수신] 구글 Apps Script 및 외부 채널로부터 매물 "${newlyAddedPropNames[0]}" 등 총 ${newlyAddedPropNames.length}건이 실시간 반영되었습니다!`);
+        }
+
+        isFirstLoad.current = false;
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'properties');
