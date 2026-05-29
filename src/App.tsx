@@ -648,104 +648,124 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Expose a public function to add properties from Google Sheets (Apps Script) & save to Firebase Firestore
-  const handleAddPropertyFromSheets = async (rawData: any) => {
+  // Expose a public function to add properties from Google Sheets (Apps Script).
+  // This populates the React admin creation form (newProp) and opens the editor form directly.
+  const handleAddPropertyFromSheets = (rawData: any) => {
     try {
       if (!rawData || typeof rawData !== "object") {
         throw new Error("Invalid payload: Body must be an object.");
       }
 
-      // Name is the only absolute must-have
-      const name = String(rawData.name || "스프레드시트 등록 매물").trim();
-      const id = String(rawData.id || `gas-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
-      
-      // Normalize and provide safe default values for all standard fields
-      const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(rawData.category)
-        ? rawData.category
+      console.log("[Sheets Integration] Inbound payload detected:", rawData);
+
+      // Clean category to match acceptable system enums correctly
+      const categoryFromPayload = String(rawData.category || "").trim();
+      const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지", "아파트 오피스텔"].includes(categoryFromPayload)
+        ? categoryFromPayload
         : "아파트";
-      const transactionType = ["매매", "전세", "월세"].includes(rawData.transactionType)
-        ? rawData.transactionType
+
+      const transactionTypeFromPayload = String(rawData.transactionType || "").trim();
+      const transactionType = ["매매", "전세", "월세"].includes(transactionTypeFromPayload)
+        ? transactionTypeFromPayload
         : "매매";
-      
-      const priceText = String(rawData.priceText || `${rawData.priceValue ? rawData.priceValue + '만' : '상담문의'}`);
-      const priceValue = Number(rawData.priceValue || 20000);
-      const rentValue = rawData.rentValue !== undefined ? Number(rawData.rentValue) : undefined;
-      const pyongValue = Number(rawData.pyongValue || 24);
-      const floorText = String(rawData.floorText || "중층");
-      const direction = String(rawData.direction || "남향");
-      const location = String(rawData.location || "부산광역시 부산진구 냉정로 일대");
-      const fullAddr = String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대");
-      const useYearText = String(rawData.useYearText || "2015년 준공");
-      const useYearValue = Number(rawData.useYearValue || 2015);
-      const householdsCount = Number(rawData.householdsCount || 450);
-      
-      const tags = Array.isArray(rawData.tags)
-        ? rawData.tags.map(String)
-        : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags.split(',').map((s: string) => s.trim()).filter(Boolean) : ["실시간연동", "스프레드시트", "추천매물"]);
-        
-      const description = String(rawData.description || "Google Apps Script 전산망을 통해 안전하게 일괄 연동 등록된 매물입니다.");
-      
-      const features = Array.isArray(rawData.features)
-        ? rawData.features.map(String)
-        : ["스프레드시트 전산 자동 등록", "교통 요충지 편리한 주차 환경", "즉시 조율 및 입주 가능"];
 
-      const latitude = Number(rawData.latitude || rawData.mapLat || 35.151261);
-      const longitude = Number(rawData.longitude || rawData.mapLng || 129.029706);
+      const priceValue = rawData.priceValue !== undefined ? String(rawData.priceValue) : '';
+      const priceText = String(rawData.priceText || (priceValue ? priceValue + '만' : ''));
 
-      const imageUrl = String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80");
+      // Fully map properties into simple React form string structure
+      setNewProp({
+        name: String(rawData.name || "스프레드시트 연동 매물").trim(),
+        category: category,
+        transactionType: transactionType,
+        priceText: priceText,
+        priceValue: priceValue,
+        rentValue: rawData.rentValue !== undefined ? String(rawData.rentValue) : '',
+        pyongValue: rawData.pyongValue !== undefined ? String(rawData.pyongValue) : '24',
+        floorText: String(rawData.floorText || "중층"),
+        direction: String(rawData.direction || "남향"),
+        location: String(rawData.location || "부산광역시 부산진구 냉정로 일대"),
+        useYearText: String(rawData.useYearText || "2015년 준공"),
+        useYearValue: rawData.useYearValue !== undefined ? String(rawData.useYearValue) : '2015',
+        householdsCount: rawData.householdsCount !== undefined ? String(rawData.householdsCount) : '150',
+        imageUrl: String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80"),
+        tags: Array.isArray(rawData.tags)
+          ? rawData.tags.join(', ')
+          : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags : "실시간연동, 추천매물"),
+        description: String(rawData.description || "구글 스프레드시트에서 가져온 안전성이 높은 매물입니다."),
+        note: String(rawData.note || ""),
+        fullAddr: String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대"),
+        area: String(rawData.area || ""),
+        floor: String(rawData.floor || rawData.floorText || "중층"),
+        dir: String(rawData.dir || rawData.direction || "남향"),
+        avail: String(rawData.avail || "즉시 입주"),
+        rooms: String(rawData.rooms || ""),
+        date: String(rawData.date || ""),
+        parking: String(rawData.parking || "가능"),
+        mFee: String(rawData.mFee || ""),
+        priceHTML: String(rawData.priceHTML || `${transactionType} ${priceText}`),
+        type: String(rawData.type || category),
+        trade: String(rawData.trade || transactionType),
+        mapLat: rawData.latitude !== undefined ? String(rawData.latitude) : (rawData.mapLat !== undefined ? String(rawData.mapLat) : '35.151261'),
+        mapLng: rawData.longitude !== undefined ? String(rawData.longitude) : (rawData.mapLng !== undefined ? String(rawData.mapLng) : '129.029706')
+      });
 
-      const normalizedProperty: Property = {
-        id,
-        name,
-        category: category as any,
-        transactionType: transactionType as any,
-        priceText,
-        priceValue,
-        rentValue,
-        pyongValue,
-        floorText,
-        direction,
-        location,
-        fullAddr,
-        useYearText,
-        useYearValue,
-        householdsCount,
-        tags,
-        description,
-        features,
-        latitude,
-        longitude,
-        mapLat: latitude,
-        mapLng: longitude,
-        imageUrl,
-        // Helper metadata fields under standard Property specification
-        priceHTML: `${transactionType} ${priceText}`,
-        type: category,
-        trade: transactionType
-      };
+      // Turn on Administrator Mode so the Admin Panel is visible!
+      setIsAdminMode(true);
+      // Open the interactive Add Property Form block!
+      setShowAddForm(true);
 
-      // Save directly to the properties collection in Firebase Firestore!
-      const docRef = doc(db, 'properties', id);
-      await setDoc(docRef, normalizedProperty);
+      // Trigger user-friendly notification
+      triggerNotification("📋 스프레드시트에서 매물 데이터가 성공적으로 불러와졌습니다. 확인 후 하단의 '매물 등록완료' 버튼을 눌러 공표해주세요!");
 
-      console.log(`[Sheets Integration] Successfully saved property to Firestore: ${id} (${name})`);
-      triggerNotification("✅ 스프레드시트에서 매물이 등록되었습니다!");
-      
-      return { success: true, id, name };
+      return { success: true, name: rawData.name };
     } catch (error) {
-      console.error("[Sheets Integration Error] Failed to register property:", error);
-      triggerNotification("❌ 스프레드시트 매물 등록 중 전산오류가 발생했습니다.");
-      throw error;
+      console.error("[Sheets Integration Error]", error);
+      triggerNotification("❌ 스프레드시트 매물 데이터 불러오기 중 전산오류가 발생했습니다.");
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   };
 
-  // Expose to window for global access/testing from console or external integrations
+  // 1. Expose to window for direct console execution, API responses or chrome-extensions
   useEffect(() => {
     (window as any).handleAddPropertyFromSheets = handleAddPropertyFromSheets;
     return () => {
       delete (window as any).handleAddPropertyFromSheets;
     };
   }, [handleAddPropertyFromSheets]);
+
+  // 2. Cross-Frame real-time message sync (iframe / sidebar interaction)
+  useEffect(() => {
+    const handleFrameMessage = (event: MessageEvent) => {
+      if (event.data && typeof event.data === 'object') {
+        const { type, payload } = event.data;
+        if (type === 'ADD_PROPERTY_FROM_SHEETS' && payload) {
+          console.log("[Sheets Listener] Real-time cross-frame message detected!");
+          handleAddPropertyFromSheets(payload);
+        }
+      }
+    };
+    window.addEventListener('message', handleFrameMessage);
+    return () => window.removeEventListener('message', handleFrameMessage);
+  }, [handleAddPropertyFromSheets]);
+
+  // 3. Automated URL-route query parameter importer for window.open direct URL redirects
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const importDataStr = urlParams.get('importData');
+      if (importDataStr) {
+        const decoded = JSON.parse(decodeURIComponent(importDataStr));
+        if (decoded && typeof decoded === 'object') {
+          console.log("[Sheets URL Importer] Loading property data from active URL query params...");
+          handleAddPropertyFromSheets(decoded);
+          // Safely purge raw secret parameters from status bar without reload to prevent re-triggers
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+    } catch (e) {
+      console.error("[Sheets URL Importer Exception]", e);
+    }
+  }, []);
 
   const [syncCount, setSyncCount] = useState<number>(0);
 
