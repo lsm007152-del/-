@@ -598,7 +598,11 @@ export default function App() {
           if (change.type === 'added' && !isFirstLoad.current) {
             const data = change.doc.data() as Property;
             if (data && data.name) {
-              newlyAddedPropNames.push(data.name);
+              if (change.doc.id.startsWith('gas-') || (data as any).isFromSheets) {
+                newlyAddedPropNames.push(`__SHEETS__:${data.name}`);
+              } else {
+                newlyAddedPropNames.push(data.name);
+              }
             }
           }
         });
@@ -627,7 +631,12 @@ export default function App() {
         setProperties(loaded);
 
         if (newlyAddedPropNames.length > 0) {
-          triggerNotification(`📢 [전산 실시간 수신] 구글 Apps Script 및 외부 채널로부터 매물 "${newlyAddedPropNames[0]}" 등 총 ${newlyAddedPropNames.length}건이 실시간 반영되었습니다!`);
+          const firstPropName = newlyAddedPropNames[0];
+          if (firstPropName.startsWith('__SHEETS__:')) {
+            triggerNotification('✅ 스프레드시트에서 매물이 등록되었습니다!');
+          } else {
+            triggerNotification(`📢 [전산 실시간 수신] 구글 Apps Script 및 외부 채널로부터 매물 "${firstPropName}" 등 총 ${newlyAddedPropNames.length}건이 실시간 반영되었습니다!`);
+          }
         }
 
         isFirstLoad.current = false;
@@ -638,6 +647,105 @@ export default function App() {
 
     return () => unsub();
   }, []);
+
+  // Expose a public function to add properties from Google Sheets (Apps Script) & save to Firebase Firestore
+  const handleAddPropertyFromSheets = async (rawData: any) => {
+    try {
+      if (!rawData || typeof rawData !== "object") {
+        throw new Error("Invalid payload: Body must be an object.");
+      }
+
+      // Name is the only absolute must-have
+      const name = String(rawData.name || "스프레드시트 등록 매물").trim();
+      const id = String(rawData.id || `gas-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+      
+      // Normalize and provide safe default values for all standard fields
+      const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(rawData.category)
+        ? rawData.category
+        : "아파트";
+      const transactionType = ["매매", "전세", "월세"].includes(rawData.transactionType)
+        ? rawData.transactionType
+        : "매매";
+      
+      const priceText = String(rawData.priceText || `${rawData.priceValue ? rawData.priceValue + '만' : '상담문의'}`);
+      const priceValue = Number(rawData.priceValue || 20000);
+      const rentValue = rawData.rentValue !== undefined ? Number(rawData.rentValue) : undefined;
+      const pyongValue = Number(rawData.pyongValue || 24);
+      const floorText = String(rawData.floorText || "중층");
+      const direction = String(rawData.direction || "남향");
+      const location = String(rawData.location || "부산광역시 부산진구 냉정로 일대");
+      const fullAddr = String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대");
+      const useYearText = String(rawData.useYearText || "2015년 준공");
+      const useYearValue = Number(rawData.useYearValue || 2015);
+      const householdsCount = Number(rawData.householdsCount || 450);
+      
+      const tags = Array.isArray(rawData.tags)
+        ? rawData.tags.map(String)
+        : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags.split(',').map((s: string) => s.trim()).filter(Boolean) : ["실시간연동", "스프레드시트", "추천매물"]);
+        
+      const description = String(rawData.description || "Google Apps Script 전산망을 통해 안전하게 일괄 연동 등록된 매물입니다.");
+      
+      const features = Array.isArray(rawData.features)
+        ? rawData.features.map(String)
+        : ["스프레드시트 전산 자동 등록", "교통 요충지 편리한 주차 환경", "즉시 조율 및 입주 가능"];
+
+      const latitude = Number(rawData.latitude || rawData.mapLat || 35.151261);
+      const longitude = Number(rawData.longitude || rawData.mapLng || 129.029706);
+
+      const imageUrl = String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80");
+
+      const normalizedProperty: Property = {
+        id,
+        name,
+        category: category as any,
+        transactionType: transactionType as any,
+        priceText,
+        priceValue,
+        rentValue,
+        pyongValue,
+        floorText,
+        direction,
+        location,
+        fullAddr,
+        useYearText,
+        useYearValue,
+        householdsCount,
+        tags,
+        description,
+        features,
+        latitude,
+        longitude,
+        mapLat: latitude,
+        mapLng: longitude,
+        imageUrl,
+        // Helper metadata fields under standard Property specification
+        priceHTML: `${transactionType} ${priceText}`,
+        type: category,
+        trade: transactionType
+      };
+
+      // Save directly to the properties collection in Firebase Firestore!
+      const docRef = doc(db, 'properties', id);
+      await setDoc(docRef, normalizedProperty);
+
+      console.log(`[Sheets Integration] Successfully saved property to Firestore: ${id} (${name})`);
+      triggerNotification("✅ 스프레드시트에서 매물이 등록되었습니다!");
+      
+      return { success: true, id, name };
+    } catch (error) {
+      console.error("[Sheets Integration Error] Failed to register property:", error);
+      triggerNotification("❌ 스프레드시트 매물 등록 중 전산오류가 발생했습니다.");
+      throw error;
+    }
+  };
+
+  // Expose to window for global access/testing from console or external integrations
+  useEffect(() => {
+    (window as any).handleAddPropertyFromSheets = handleAddPropertyFromSheets;
+    return () => {
+      delete (window as any).handleAddPropertyFromSheets;
+    };
+  }, [handleAddPropertyFromSheets]);
 
   const [syncCount, setSyncCount] = useState<number>(0);
 
