@@ -3872,7 +3872,7 @@ export default function App() {
               부강공인중개사사무소로 오시는 길
             </h2>
             <p className="text-slate-500 text-xs sm:text-sm font-bold leading-relaxed">
-              서면역, 개금역 인근 및 냉정로 273 큰 대로변 1층에 자리하고 있어 쉽게 발견하실 수 있습니다.
+              롯데캐슬골드아너, 가야반도보라빌 인근 큰 대로변 1층에 자리하고 있어 쉽게 발견하실 수 있습니다.
             </p>
           </div>
 
@@ -3885,9 +3885,9 @@ export default function App() {
               <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-amber-200/50 shadow-sm z-10 text-xs flex flex-col gap-0.5">
                 <span className="font-black text-slate-900 flex items-center gap-1">
                   <Navigation className="w-3.5 h-3.5 text-amber-500" />
-                  냉정로 1층 초록색 대간판 「부강 부동산」
+                  노란색 간판 부강부동산
                 </span>
-                <span className="text-[10px] text-slate-400 font-bold">오프라인 차량 주차 상시 무료 지원 가능</span>
+                <span className="text-[10px] text-slate-400 font-bold">주차 무료 지원</span>
               </div>
 
               {/* Kakao Map Component Container */}
@@ -3920,31 +3920,6 @@ export default function App() {
                         <div className="text-[10px] text-slate-500 font-extrabold">부산 냉정로 273 (큰 대로변 1층)</div>
                       </div>
                     </MapMarker>
-
-                    {/* Listings Markers */}
-                    {filteredProperties.map((prop) => {
-                      const propLat = Number(prop.latitude !== undefined ? prop.latitude : prop.mapLat);
-                      const propLng = Number(prop.longitude !== undefined ? prop.longitude : prop.mapLng);
-                      return (
-                        <MapMarker
-                          key={prop.id}
-                          position={{ lat: propLat, lng: propLng }}
-                          onClick={() => openDetailsAndSetInquiry(prop)}
-                          image={{
-                            src: "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
-                            size: { width: 24, height: 35 }
-                          }}
-                        >
-                          <div className="p-1.5 text-[10px] font-black text-slate-800 bg-white border border-slate-200 rounded shadow max-w-[160px] truncate cursor-pointer font-sans">
-                            <span className="text-[9px] bg-amber-400 text-slate-950 px-1 py-0.2 rounded mr-1">
-                              {prop.transactionType}
-                            </span>
-                            {prop.name.replace(' 아파트', '')}
-                            <div className="text-amber-800 font-extrabold mt-0.5">{prop.priceText}</div>
-                          </div>
-                        </MapMarker>
-                      );
-                    })}
                   </Map>
                 ) : kakaoLoadFailed ? (
                   <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-rose-50 font-sans border border-rose-200 rounded-2xl">
@@ -3968,9 +3943,21 @@ export default function App() {
               </div>
 
               {/* Instructions list below */}
-              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/50 text-slate-600 font-semibold text-[10px] sm:text-xs tracking-tight flex flex-col gap-1 mt-4">
-                <span className="font-extrabold text-[#F59E0B] block">🚗 승용차 방문시:</span>
-                <p>네비게이션에 대놓고 <span className="font-black text-slate-800 underline decoration-amber-400">냉정로 273</span> 입력후 정주행 하시면, 매장 바로 좌측 주차장에 무료 주차 가능합니다.</p>
+              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/50 text-slate-600 font-semibold text-[10px] sm:text-xs tracking-tight flex flex-col gap-3 mt-4">
+                <div>
+                  <span className="font-extrabold text-[#F59E0B] block mb-1">🚗 승용차 방문시:</span>
+                  <p>부산 부산진구 가야공원로 20-1 <span className="font-black text-slate-800 underline decoration-amber-400">동양민영주차장</span> 에 무료 주차 가능합니다. 주차 하신 후, 걸어서 부강부동산으로 방문해주세요.</p>
+                </div>
+                
+                <div className="border-t border-slate-100/80 pt-2.5">
+                  <span className="font-extrabold text-amber-600 block mb-1">🚇 지하철 방문시:</span>
+                  <p>동의대역 7번 출구에서 빠져나와 직진한 후, 가야성당 방면으로 좌회전하신 후 위로 올라오시면 교차로에 부강부동산이 보입니다.</p>
+                </div>
+                
+                <div className="border-t border-slate-100/80 pt-2.5">
+                  <span className="font-extrabold text-blue-600 block mb-1">🚌 버스 방문시:</span>
+                  <p>67번 버스를 탑승하신 후, 가야지구 or 가야2동새마을금고에 내리신 후 걸어오시면 됩니다.</p>
+                </div>
               </div>
 
             </div>
