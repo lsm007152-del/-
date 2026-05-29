@@ -36,6 +36,81 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Map, MapMarker, CustomOverlayMap, useKakaoLoader } from 'react-kakao-maps-sdk';
 import html2canvas from 'html2canvas';
 
+// Firebase SDK & Centralized Firestore integration configuration
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  deleteDoc, 
+  getDocFromServer,
+  writeBatch,
+  getDocs,
+  getDoc
+} from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
+
+const firebaseApp = initializeApp(firebaseConfig);
+export const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: null,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Check Firestore live connection on startup
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration or network status.");
+    }
+  }
+}
+testConnection();
+
 // ==========================================
 // TYPES & INTERFACES DEFINITIONS
 // ==========================================
@@ -471,45 +546,7 @@ export default function App() {
   });
 
   const [properties, setProperties] = useState<Property[]>(() => {
-    try {
-      const saved = localStorage.getItem('bugang_properties');
-      if (saved !== null) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          console.log(`[Storage Loader SECURE] Successfully parsed '${parsed.length}' items from localStorage.`);
-          return parsed.map(prop => {
-            let lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat || 35.151261));
-            let lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng || 129.029706));
-            
-            // Fix prop-1 or and/or search strings to align mapping
-            if (prop.id === 'prop-1' || prop.name?.includes('개금 현대') || prop.location?.includes('냉정로 273') || prop.fullAddr?.includes('냉정로 273')) {
-              lat = 35.151261;
-              lng = 129.029706;
-              return {
-                ...prop,
-                location: '부산광역시 부산진구 냉정로 273 (개금동, 현대아파트)',
-                fullAddr: '부산광역시 부산진구 냉정로 273 (개금동, 현대아파트)',
-                latitude: lat,
-                longitude: lng,
-                mapLat: lat,
-                mapLng: lng
-              };
-            }
-            return {
-              ...prop,
-              latitude: Number.isNaN(lat) ? 35.151261 : lat,
-              longitude: Number.isNaN(lng) ? 129.029706 : lng,
-              mapLat: Number.isNaN(lat) ? 35.151261 : lat,
-              mapLng: Number.isNaN(lng) ? 129.029706 : lng
-            };
-          });
-        }
-      }
-    } catch (e: any) {
-      console.error('[Storage Loader SECURE Warning] LocalStorage load failed, defaulting to setup list:', e?.message || String(e));
-    }
-
-    console.log('[Storage Loader] Initializing state with default physical mock pre-populated values.');
+    // Return INITIAL_PROPERTIES as fallback until firestore loads or seeds
     return INITIAL_PROPERTIES.map(prop => {
       const lat = Number((prop as any).latitude || prop.mapLat || 35.151261);
       const lng = Number((prop as any).longitude || prop.mapLng || 129.029706);
@@ -523,47 +560,64 @@ export default function App() {
     });
   });
 
-  // Save properties to localStorage when altered with deep protective filters
+  // Real-time synchronization of property data from/to Firebase Firestore with seed fallback
   useEffect(() => {
-    try {
-      if (properties && Array.isArray(properties)) {
-        // High-safety validation before serializing down to disk, filtering out corrupted listings
-        const cleanToSave = properties.filter(p => p && p.id && p.name);
-        localStorage.setItem('bugang_properties', JSON.stringify(cleanToSave));
-        console.log(`[Storage Synchronizer] Written ${cleanToSave.length} clean, validated records to browser secure storage.`);
-      }
-    } catch (e: any) {
-      console.error('[Storage Synchronizer Error] Failed to commit changes to localStorage:', e?.message || String(e));
-    }
-  }, [properties]);
-
-  // Share state across multiple windows/tabs in real-time instantly without reloads
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'bugang_properties' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) {
-            console.log(`[Cross-Tab Realtime Synchronizer] Detected properties list changes in another window. Synced ${parsed.length} items.`);
-            setProperties(parsed.map(prop => {
-              const lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat || 35.151261));
-              const lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng || 129.029706));
-              return {
-                ...prop,
-                latitude: Number.isNaN(lat) ? 35.151261 : lat,
-                longitude: Number.isNaN(lng) ? 129.029706 : lng,
-                mapLat: Number.isNaN(lat) ? 35.151261 : lat,
-                mapLng: Number.isNaN(lng) ? 129.029706 : lng
-              };
-            }));
+    const unsub = onSnapshot(collection(db, 'properties'), (snapshot) => {
+      if (snapshot.empty) {
+        console.log('[Firestore Sync] Database is empty. Seeding INITIAL_PROPERTIES list...');
+        // Seed default dataset in a single transaction-like batch
+        const batch = writeBatch(db);
+        INITIAL_PROPERTIES.forEach((prop) => {
+          const docRef = doc(db, 'properties', prop.id);
+          const lat = Number((prop as any).latitude || prop.mapLat || 35.151261);
+          const lng = Number((prop as any).longitude || prop.mapLng || 129.029706);
+          const normalized = {
+            ...prop,
+            latitude: lat,
+            longitude: lng,
+            mapLat: lat,
+            mapLng: lng
+          };
+          batch.set(docRef, normalized);
+        });
+        batch.commit()
+          .then(() => {
+            console.log('[Firestore Sync] Finished seeding INITIAL_PROPERTIES successfully.');
+            triggerNotification('🔥 Firebase 데이터베이스에 대표 기본 매물이 다중 접속 동기화용으로 안전하게 복원 등록되었습니다!');
+          })
+          .catch((err) => {
+            console.error('[Firestore Sync] Seeding error:', err);
+          });
+      } else {
+        const loaded: Property[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as Property;
+          
+          let lat = Number(data.latitude !== undefined ? data.latitude : (data.mapLat || 35.151261));
+          let lng = Number(data.longitude !== undefined ? data.longitude : (data.mapLng || 129.029706));
+          
+          if (data.id === 'prop-1' || data.name?.includes('개금 현대') || data.location?.includes('냉정로 273') || data.fullAddr?.includes('냉정로 273')) {
+            lat = 35.151261;
+            lng = 129.029706;
           }
-        } catch (err) {
-          console.error('[Cross-Tab Sync Event Error] Parsing failure:', err);
-        }
+          
+          loaded.push({
+            ...data,
+            latitude: Number.isNaN(lat) ? 35.151261 : lat,
+            longitude: Number.isNaN(lng) ? 129.029706 : lng,
+            mapLat: Number.isNaN(lat) ? 35.151261 : lat,
+            mapLng: Number.isNaN(lng) ? 129.029706 : lng,
+          });
+        });
+        
+        console.log(`[Firestore Sync] Successfully synchronized ${loaded.length} properties from cloud live db.`);
+        setProperties(loaded);
       }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'properties');
+    });
+
+    return () => unsub();
   }, []);
 
   const [syncCount, setSyncCount] = useState<number>(0);
@@ -605,11 +659,17 @@ export default function App() {
           };
         });
 
-        setProperties(prev => {
-          // Keep manual properties if they don't start with realtime- to prevent infinite duplication
-          const userCreatedAndDefault = prev.filter(p => !p.id.startsWith('realtime-'));
-          return [...fetchedProps, ...userCreatedAndDefault];
-        });
+        // Write each fetched prop to Firestore so ALL users/Tabs instantly can load them
+        try {
+          const batch = writeBatch(db);
+          fetchedProps.forEach((prop) => {
+            const docRef = doc(db, 'properties', prop.id);
+            batch.set(docRef, prop);
+          });
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'properties-b2b-batch');
+        }
 
         const count = fetchedProps.length;
         setSyncCount(prev => prev + count);
@@ -650,11 +710,15 @@ export default function App() {
     setDeletePropertyId(propertyId);
   };
 
-  const executeDeleteProperty = (propertyId: string) => {
+  const executeDeleteProperty = async (propertyId: string) => {
     console.log(`[Delete Action Executed] Successfully deleting property ID: ${propertyId}`);
 
-    // 1. Update core react lists
-    setProperties(prev => prev.filter(p => p.id !== propertyId));
+    try {
+      await deleteDoc(doc(db, 'properties', propertyId));
+      triggerNotification('🗑️ 매물이 클라우드 데이터베이스에서 영구 삭제되었습니다.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `properties/${propertyId}`);
+    }
 
     // 2. Explicitly clear state coordinates & select buffers
     if (activeMarkerId === propertyId) {
@@ -671,74 +735,77 @@ export default function App() {
       setHoveredPropertyId(null);
     }
 
-    // 3. Inform user clearly
-    triggerNotification('🗑️ 매물이 전산 목록에서 영구적으로 완전히 삭제 처리되었습니다.');
     setDeletePropertyId(null);
   };
 
-  const handleResetLocalStorage = () => {
+  const handleResetFirestore = async () => {
     const confirmReset = window.confirm(
-      "🔄 [부강 대표전산 원상복구]\n\n정말 로컬스토리지 데이터를 원상복구하시겠습니까?\n모든 수동 복사/삭제/추가된 매물 일체와 커스텀 변경 기록이 영구 폐기되며, 부강부동산 원본 기본 전산망 리스트로 즉각 안전하게 원복됩니다."
+      "🔄 [부강 대표전산 원상복구]\n\n정말 클라우드 데이터베이스를 원상복구하시겠습니까?\n모든 수동 변경/삭제/추가된 매물 일체와 커스텀 기록이 영구 폐기되며, 부강부동산 원본 기본 전산망 리스트로 즉각 안전하게 원복됩니다."
     );
     if (confirmReset) {
       try {
-        localStorage.removeItem('bugang_properties');
-        localStorage.removeItem('bugang_favorites');
+        // Fetch current active properties to delete them from Firestore
+        const collRef = collection(db, 'properties');
+        const snap = await getDocs(collRef);
         
-        // Build clear fallback list
-        const resetList = INITIAL_PROPERTIES.map(prop => {
+        const batch = writeBatch(db);
+        snap.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+        
+        // Build clear fallback list & write
+        INITIAL_PROPERTIES.forEach((prop) => {
           const lat = Number((prop as any).latitude || prop.mapLat || 35.151261);
           const lng = Number((prop as any).longitude || prop.mapLng || 129.029706);
-          return {
+          const normalizedProp = {
             ...prop,
             latitude: lat,
             longitude: lng,
             mapLat: lat,
             mapLng: lng
           };
+          const docRef = doc(db, 'properties', prop.id);
+          batch.set(docRef, normalizedProp);
         });
+
+        await batch.commit();
         
-        setProperties(resetList);
         setActiveMarkerId(null);
         setSelectedProperty(null);
         setHoveredPropertyId(null);
         setFavorites([]);
         setMapCenter({ lat: 35.151261, lng: 129.029706 });
         
-        triggerNotification('🔄 전산 정상화 완료: 브라우저 캐시 및 매물 대장이 부강 기본 설정으로 깨끗하게 초기화 복원되었습니다.');
+        triggerNotification('🔄 전산 정상화 완료: 클라우드 데이터베이스 및 매물 대장이 부강 기본 설정으로 깨끗하게 초기화 복원되었습니다.');
       } catch (err: any) {
-        console.error('Reset local storage failed:', err?.message || String(err));
-        triggerNotification('❌ 로컬스토리지 초기화 실행 중 기술 오류가 발생했습니다.');
+        console.error('Reset firestore failed:', err?.message || String(err));
+        triggerNotification('❌ 클라우드 초기화 실행 중 기술 오류가 발생했습니다.');
       }
     }
   };
 
-  const handleForceReloadLocalStorage = () => {
+  const handleForceSyncFirestore = async () => {
     try {
-      const saved = localStorage.getItem('bugang_properties');
-      if (saved !== null) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const normalized = parsed.map(prop => {
-            const lat = Number(prop.latitude !== undefined ? prop.latitude : (prop.mapLat !== undefined ? prop.mapLat : 35.151261));
-            const lng = Number(prop.longitude !== undefined ? prop.longitude : (prop.mapLng !== undefined ? prop.mapLng : 129.029706));
-            return {
-              ...prop,
-              latitude: Number.isNaN(lat) ? 35.151261 : lat,
-              longitude: Number.isNaN(lng) ? 129.029706 : lng,
-              mapLat: Number.isNaN(lat) ? 35.151261 : lat,
-              mapLng: Number.isNaN(lng) ? 129.029706 : lng
-            };
-          });
-          setProperties(normalized);
-          triggerNotification(`⚡ [스토리지 강제 동기화] 브라우저 내 최신 스토리지 데이터 ${normalized.length}건을 즉각 강제 재로드했습니다.`);
-          return;
-        }
-      }
-      triggerNotification('ℹ️ 현재 브라우저 저장소에 저장되어 있는 매물 데이터가 존재하지 않습니다.');
+      const collRef = collection(db, 'properties');
+      const snap = await getDocs(collRef);
+      const loaded: Property[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Property;
+        let lat = Number(data.latitude !== undefined ? data.latitude : (data.mapLat || 35.151261));
+        let lng = Number(data.longitude !== undefined ? data.longitude : (data.mapLng || 129.029706));
+        loaded.push({
+          ...data,
+          latitude: Number.isNaN(lat) ? 35.151261 : lat,
+          longitude: Number.isNaN(lng) ? 129.029706 : lng,
+          mapLat: Number.isNaN(lat) ? 35.151261 : lat,
+          mapLng: Number.isNaN(lng) ? 129.029706 : lng,
+        });
+      });
+      setProperties(loaded);
+      triggerNotification(`⚡ [실시간 클라우드 강제 동기화] 클라우드 DB로부터 최신 데이터 ${loaded.length}건을 즉각 강제 재로드했습니다.`);
     } catch (e: any) {
-      console.error('Force reload localStorage failed:', e);
-      triggerNotification('❌ 브라우저 저장소 데이터를 강제 동기화하는 도중 기술 오류가 발생했습니다.');
+      console.error('Force Firestore sync failed:', e);
+      triggerNotification('❌ 클라우드 데이터 강제 동기화 중 오류가 발생했습니다.');
     }
   };
 
@@ -878,7 +945,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [newProp.fullAddr]);
 
-  const handleRegisterProperty = (e: React.FormEvent) => {
+  const handleRegisterProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProp.name.trim()) {
       alert('매물 명칭을 입력해주세요.');
@@ -934,7 +1001,13 @@ export default function App() {
       trade: newProp.trade || newProp.transactionType
     };
 
-    setProperties(prev => [created, ...prev]);
+    try {
+      await setDoc(doc(db, 'properties', generatedId), created);
+      triggerNotification('🏠 새 매물이 클라우드 실시간망에 즉각 등록되었습니다.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `properties/${generatedId}`);
+    }
+
     setShowAddForm(false);
     
     // Auto-center map on the registered property and highlight it
@@ -976,7 +1049,7 @@ export default function App() {
       mapLng: ''
     });
 
-    alert('🥳 새 매물이 성공적으로 직접 등록되었습니다!');
+    alert('🥳 새 매물이 클라우드 실시간 전산망에 안전하게 직접 등록되었습니다!');
   };
 
   // Capture div with id=capture-area-{propertyId} as image and download
@@ -2142,27 +2215,27 @@ export default function App() {
                       <span>중개사 전용 매물 관리 시스템 (직접 등록)</span>
                     </h3>
                     <p className="text-[11px] text-slate-500 font-bold mt-0.5">
-                      매물장에 땡겨오며 발생하던 동기화 지연/오류 없이, 브라우저가 관리하는 수동 매물장입니다.
+                      실시간 클라우드 데이터베이스(Firebase Firestore)를 경유해 모든 브라우저 및 기기에서 즉각 실시간 동기화되는 중앙 관리형 매물장입니다.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                     <button
                       type="button"
-                      onClick={handleForceReloadLocalStorage}
+                      onClick={handleForceSyncFirestore}
                       className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      title="브라우저 저장소 데이터가 오차가 생겼을 때 강제로 즉각 다시 로드합니다."
+                      title="클라우드 실시간 데이터베이스로부터 즉시 데이터를 다시 강제 호출합니다."
                     >
                       <RefreshCw className="w-3.5 h-3.5 text-slate-600 transition-transform duration-500 hover:rotate-180 active:scale-90" />
-                      <span>로컬스토리지 강제 새로고침</span>
+                      <span>클라우드 강제 동기화</span>
                     </button>
                     <button
                       type="button"
-                      onClick={handleResetLocalStorage}
+                      onClick={handleResetFirestore}
                       className="bg-amber-100 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                      title="모든 로컬 변경사항을 삭제하고 부강 최신 원본 매물 대장 리스트로 복구합니다."
+                      title="클라우드 DB의 모든 매물 정보를 초기 상태 원본 매물 대장 리스트로 복구합니다."
                     >
                       <RefreshCw className="w-3.5 h-3.5 text-amber-800" />
-                      <span>기본 전산 복구 (초기화)</span>
+                      <span>클라우드 DB 원상복구 (초기화)</span>
                     </button>
                     <button
                       type="button"

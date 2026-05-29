@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "Property": {
+      "title": "Property",
+      "description": "Real estate listing entry for Bugang estate.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the property" },
+        "name": { "type": "string", "description": "Title or display name of the listing" },
+        "category": { "type": "string", "enum": ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지", "아파트 오피스텔"], "description": "Filter asset type" },
+        "transactionType": { "type": "string", "enum": ["매매", "전세", "월세"], "description": "Type of financial transaction" },
+        "priceText": { "type": "string", "description": "Formatted text block of the listing cost (e.g. 5,000만)" },
+        "priceValue": { "type": "number", "description": "Primary pricing value (numerical)" },
+        "rentValue": { "type": "number", "description": "Monthly rental cost value (optional)" },
+        "pyongValue": { "type": "number", "description": "Square areas equivalent key" },
+        "floorText": { "type": "string", "description": "Vertical position descriptive text" },
+        "direction": { "type": "string", "description": "South/West/North/East visual orientation" },
+        "location": { "type": "string", "description": "Korea physical road or block address" },
+        "useYearText": { "type": "string", "description": "Age label of structure" },
+        "useYearValue": { "type": "number", "description": "Construction calendar year value" },
+        "householdsCount": { "type": "number", "description": "Active living quarters size scale" },
+        "tags": { "type": "array", "description": "Visual highlighting badges list" },
+        "description": { "type": "string", "description": "Narrative breakdown detailed description" },
+        "features": { "type": "array", "description": "Key bullet specifications list" },
+        "fullAddr": { "type": "string" },
+        "area": { "type": "string" },
+        "floor": { "type": "string" },
+        "dir": { "type": "string" },
+        "avail": { "type": "string" },
+        "rooms": { "type": "string" },
+        "date": { "type": "string" },
+        "parking": { "type": "string" },
+        "mFee": { "type": "string" },
+        "note": { "type": "string" },
+        "priceHTML": { "type": "string" },
+        "type": { "type": "string" },
+        "trade": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "mapLat": { "type": "number" },
+        "mapLng": { "type": "number" }
+      },
+      "required": ["id", "name", "category", "transactionType", "priceText", "priceValue", "pyongValue", "floorText", "direction", "location", "useYearText", "useYearValue", "householdsCount", "tags", "description", "features", "imageUrl", "mapLat", "mapLng"]
+    }
+  },
+  "firestore": {
+    "properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Bugang properties database listings"
+    }
+  }
+}
