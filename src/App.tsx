@@ -7,6 +7,7 @@ import {
   Building, 
   Home, 
   ChevronRight, 
+  ChevronLeft,
   X, 
   TrendingUp, 
   Check, 
@@ -30,7 +31,8 @@ import {
   RefreshCw,
   Map as MapIcon,
   LayoutGrid,
-  ListCollapse
+  ListCollapse,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Map, MapMarker, CustomOverlayMap, useKakaoLoader } from 'react-kakao-maps-sdk';
@@ -117,7 +119,7 @@ testConnection();
 
 export type TransactionType = '전체' | '매매' | '전세' | '월세';
 export type FilterCategory = '전체' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔';
-export type ActiveTabType = '매물검색' | '전체' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔' | '오시는길' | '매물접수';
+export type ActiveTabType = '매물검색' | '지도검색' | '전체' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔' | '오시는길' | '매물접수';
 
 export interface Property {
   id: string;
@@ -473,6 +475,7 @@ export default function App() {
   
   // Interactive Dropdowns Controls
   const [activeDropdown, setActiveDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
+  const [activeStickyDropdown, setActiveStickyDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
   const [advancedSearch, setAdvancedSearch] = useState<boolean>(false);
   
   // Detail Modal Controls
@@ -483,6 +486,9 @@ export default function App() {
     const saved = localStorage.getItem('bugang_favorites');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Grid View Pagination State
+  const [gridPage, setGridPage] = useState<number>(1);
 
   // Mobile Menu Drawer Control
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -1226,6 +1232,20 @@ export default function App() {
     localStorage.setItem('bugang_favorites', JSON.stringify(favorites));
   }, [favorites]);
 
+  // Reset grid page on any filter state changes
+  useEffect(() => {
+    setGridPage(1);
+  }, [
+    selectedCategory,
+    selectedTransaction,
+    priceLimit,
+    sizeRange,
+    useYear,
+    householdCount,
+    searchQuery,
+    activeTab,
+  ]);
+
   // Handle Tab Switch
   const handleNavClick = (
     tabName: ActiveTabType,
@@ -1233,13 +1253,19 @@ export default function App() {
   ) => {
     setActiveTab(tabName);
     
+    if (tabName === '지도검색') {
+      setViewMode('map');
+    } else if (tabName === '매물검색') {
+      setViewMode('grid');
+    }
+    
     // Auto configure category filters based on Top Navbar selections
-    if (tabName !== '매물검색' && tabName !== '오시는길' && tabName !== '매물접수') {
+    if (tabName !== '매물검색' && tabName !== '지도검색' && tabName !== '오시는길' && tabName !== '매물접수') {
       setSelectedCategory(tabName as FilterCategory);
       setActiveSubPills([tabName]);
-    } else if (tabName === '매물검색') {
-      setSelectedCategory('아파트');
-      setActiveSubPills(['아파트']);
+    } else if (tabName === '매물검색' || tabName === '지도검색') {
+      setSelectedCategory('전체');
+      setActiveSubPills(['전체']);
     }
 
     if (sectionId) {
@@ -1296,6 +1322,52 @@ export default function App() {
     } else {
       setFavorites([...favorites, id]);
     }
+  };
+
+  // Click handler for modern home screen category cards
+  const handleCategoryCardClick = (categoryName: string) => {
+    setIsMobileMenuOpen(false);
+    
+    // Set viewMode to map/grid search immediately
+    setViewMode('map');
+    setActiveTab('매물검색');
+    
+    if (categoryName === '아파트') {
+      setSelectedCategory('아파트');
+      setActiveSubPills(['아파트']);
+    } else if (categoryName === '오피스텔') {
+      setSelectedCategory('오피스텔');
+      setActiveSubPills(['오피스텔']);
+    } else if (categoryName === '분양권') {
+      setSelectedCategory('분양권');
+      setActiveSubPills(['분양권']);
+    } else if (categoryName === '원룸·투룸') {
+      setSelectedCategory('원룸');
+      setActiveSubPills(['원룸', '투룸']);
+    } else if (categoryName === '상가') {
+      setSelectedCategory('상가');
+      setActiveSubPills(['상가']);
+    } else if (categoryName === '공장') {
+      setSelectedCategory('공장');
+      setActiveSubPills(['공장']);
+    } else if (categoryName === '토지') {
+      setSelectedCategory('토지');
+      setActiveSubPills(['토지']);
+    } else if (categoryName === '주택') {
+      setSelectedCategory('주택');
+      setActiveSubPills(['주택']);
+    } else if (categoryName === '빌라') {
+      setSelectedCategory('빌라');
+      setActiveSubPills(['빌라']);
+    }
+
+    // Scroll smoothly to listings section so user sees the active results map immediately
+    setTimeout(() => {
+      const el = document.getElementById('listings-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
   };
 
   // Submit offline inquiry handle
@@ -1498,6 +1570,12 @@ export default function App() {
     if (displayList.length >= AVAILABLE_CATEGORIES.length || displayList.length === 0) return '전체';
     return displayList.join('·');
   }, [activeSubPills]);
+
+  // Paginated properties for Grid (목록형) View (12 items per page)
+  const paginatedProperties = useMemo(() => {
+    const startIndex = (gridPage - 1) * 12;
+    return filteredProperties.slice(startIndex, startIndex + 12);
+  }, [filteredProperties, gridPage]);
 
   // Combine filtered properties and active registration preview marker for all map rendering
   const allMapProperties = useMemo(() => {
@@ -1829,10 +1907,10 @@ export default function App() {
             {/* Logo/Identity Area */}
             <div 
               onClick={() => handleNavClick('매물검색')} 
-              className="flex items-center gap-2 cursor-pointer group"
+              className="flex items-center gap-2 cursor-pointer group shrink-0"
               id="header-logo-area"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-amber-400 to-amber-600 flex items-center justify-center border border-amber-300/30 shadow-md group-hover:scale-105 transition-all duration-300">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-amber-400 to-amber-600 flex items-center justify-center border border-amber-300/30 shadow-md group-hover:scale-105 transition-all duration-300 shrink-0">
                 <svg className="w-6 h-6 text-slate-950" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {/* Modern Luxury Real Estate Concept Logo */}
                   <path d="M15 50L50 15L85 50" stroke="currentColor" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1841,82 +1919,88 @@ export default function App() {
                   <path d="M50 8L52.5 13.5L58.5 14L54 18L55.5 24L50 21L44.5 24L46 18L41.5 14L47.5 13.5L50 8Z" fill="currentColor" />
                 </svg>
               </div>
-              <div className="flex flex-col">
-                <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">
+              <div className="flex flex-col min-w-0">
+                <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors whitespace-nowrap">
                   부강부동산
                 </span>
-                <span className="text-[10px] font-extrabold text-neutral-400 tracking-wider">
+                <span className="text-[10px] font-extrabold text-neutral-400 tracking-wider whitespace-nowrap">
                   전문 중개 ・ 자문 컨설팅
                 </span>
               </div>
             </div>
 
-            {/* Desktop Navigation Menus */}
-            <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 flex-wrap" id="desktop-nav-menus">
+            {/* Desktop Navigation Menus (매물검색 / 지도검색) */}
+            <nav className="hidden lg:flex items-center gap-2.5 flex-wrap" id="desktop-nav-menus">
               {[
-                { name: '매물검색', id: 'listings-section' },
-                { name: '아파트', id: 'listings-section' },
-                { name: '오피스텔', id: 'listings-section' },
-                { name: '분양권', id: 'listings-section' },
-                { name: '원룸', id: 'listings-section' },
-                { name: '투룸', id: 'listings-section' },
-                { name: '주택', id: 'listings-section' },
-                { name: '빌라', id: 'listings-section' },
-                { name: '상가', id: 'listings-section' },
-                { name: '공장', id: 'listings-section' },
-                { name: '토지', id: 'listings-section' },
-                { name: '오시는길', id: 'map-section' },
-                { name: '매물접수', id: 'inquiry-section' }
+                { name: '매물검색', id: 'listings-section', icon: <Search className="w-3.5 h-3.5 shrink-0" /> },
+                { name: '지도검색', id: 'listings-section', icon: <MapIcon className="w-3.5 h-3.5 shrink-0" /> }
               ].map((menu) => {
                 const isSelected = activeTab === menu.name;
                 return (
                   <button
                     key={menu.name}
                     onClick={() => handleNavClick(menu.name as any, menu.id)}
-                    className={`relative px-1.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-extrabold tracking-tight transition-all duration-200 cursor-pointer ${
+                    className={`relative px-4 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition-all duration-300 shadow-xs hover:scale-[1.02] active:scale-95 cursor-pointer border ${
                       isSelected 
-                        ? 'text-amber-700 bg-amber-100/65' 
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+                        ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-500/30' 
+                        : 'bg-amber-550/10 hover:bg-amber-500/20 text-amber-900 border-amber-500/20 bg-amber-500/10'
                     }`}
                   >
-                    {menu.name}
-                    {isSelected && (
-                      <motion.span 
-                        layoutId="activeTabIndicator" 
-                        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-500" 
-                      />
-                    )}
+                    {menu.icon}
+                    <span>{menu.name}</span>
                   </button>
                 );
               })}
             </nav>
 
-            {/* Contact Call action & Mobile Hamburger */}
-            <div className="flex items-center gap-2">
+            {/* Premium Action Buttons - Far Right Positioned */}
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0" id="header-actions">
+              
+              {/* 오시는 길 (Yellow 바탕 & Highlighted) */}
+              <button 
+                onClick={() => handleNavClick('오시는길', 'map-section')}
+                className="hidden sm:flex items-center gap-1 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black px-3.5 py-2 rounded-xl text-xs sm:text-sm border border-amber-400/20 shadow-xs transition-all tracking-tight whitespace-nowrap active:scale-95 hover:scale-[1.02]"
+              >
+                <MapPin className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                <span>오시는 길</span>
+              </button>
+
+              {/* 매물접수 (Yellow 바탕 & Highlighted) */}
+              <button 
+                onClick={() => handleNavClick('매물접수', 'inquiry-section')}
+                className="hidden sm:flex items-center gap-1 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black px-3.5 py-2 rounded-xl text-xs sm:text-sm border border-amber-400/20 shadow-xs transition-all tracking-tight whitespace-nowrap active:scale-95 hover:scale-[1.02]"
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                <span>매물접수</span>
+              </button>
+
+              {/* 관리자 On/Off Button */}
               <button
                 onClick={() => setIsAdminMode(!isAdminMode)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
                   isAdminMode 
                     ? 'bg-amber-600 text-white border-amber-500 shadow-md scale-[1.02]' 
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                 }`}
                 title="매물 직접 등록 및 관리"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                <Lock className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" />
                 <span>{isAdminMode ? '관리자 On' : '🔑 관리자'}</span>
               </button>
 
+              {/* 051-897-8900 전화번호 */}
               <a 
                 href="tel:051-897-8900" 
-                className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm border border-amber-400/20 shadow-xs transition-all tracking-tight"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm border border-amber-400/20 shadow-xs transition-all tracking-tight whitespace-nowrap shrink-0 hover:scale-[1.02] active:scale-95"
               >
-                <Phone className="w-4 h-4 text-slate-950 animate-bounce" />
+                <Phone className="w-3.5 h-3.5 text-slate-950 animate-bounce shrink-0" />
                 <span>051-897-8900</span>
               </a>
 
+              {/* Hamburger menu trigger for mobile devices */}
               <button 
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl md:hidden transition-colors"
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl md:hidden transition-colors shrink-0"
                 id="hamburger-button"
               >
                 <Menu className="w-5.5 h-5.5" />
@@ -1965,13 +2049,13 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto pr-1">
-                  {(['매물검색', '아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지', '오시는길', '매물접수'] as ActiveTabType[]).map((item) => {
+                  {(['매물검색', '지도검색', '오시는길', '매물접수'] as ActiveTabType[]).map((item) => {
                     const isSelected = activeTab === item;
                     return (
                       <button
                         key={item}
                         onClick={() => {
-                          if (item === '매물검색' || item === '오시는길' || item === '매물접수') {
+                          if (item === '매물검색' || item === '지도검색' || item === '오시는길' || item === '매물접수') {
                             handleNavClick(item, item === '오시는길' ? 'map-section' : item === '매물접수' ? 'inquiry-section' : 'listings-section');
                           } else {
                             applyPresetFilter(item as FilterCategory, '전체');
@@ -1980,7 +2064,7 @@ export default function App() {
                           setIsMobileMenuOpen(false);
                         }}
                         className={`w-full text-left px-4 py-2.5 rounded-lg text-xs font-black transition-all ${
-                          isSelected ? 'bg-amber-50 text-amber-700 font-black border-l-2 border-amber-500' : 'text-slate-700 hover:bg-slate-50'
+                          isSelected ? 'bg-amber-100 text-amber-900 font-black border-l-2 border-amber-500' : 'text-slate-700 hover:bg-slate-50'
                         }`}
                       >
                         {item}
@@ -2057,403 +2141,234 @@ export default function App() {
               </div>
 
           {/* ==========================================
-              NAVER REAL ESTATE STYLE FILTER STATION (Frosted Card - placed in Left Column)
+              KOREAN REAL ESTATE CATEGORY CARDS (Grid layout matching user requested categories styled with premium brand amber theme)
               ========================================== */}
-          <motion.div 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="w-full bg-white/85 backdrop-blur-lg rounded-2xl shadow-xl border border-amber-200/60 p-4 sm:p-5 text-left"
-            id="naver-filter-station"
-          >
-            <div className="flex flex-col gap-4">
+          <div className="w-full py-2.5" id="korean-category-cards-station">
+            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2.5 md:gap-3">
               
-              {/* Category selector row with "전체" and multi-selection support */}
-              <div className="flex flex-wrap items-center gap-1.5 border-b border-amber-150/40 pb-3 h-auto max-h-[120px] overflow-y-auto" id="naver-main-categories">
-                {/* '전체' (All) Category Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
-                    setActiveSubPills(AVAILABLE_CATEGORIES);
-                    setSelectedCategory('전체');
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    (activeSubPills.length >= 10 || activeSubPills.includes('전체') || selectedCategory === '전체')
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'bg-slate-100/60 text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
-                  }`}
-                >
-                  전체
-                </button>
-
-                {[
-                  { label: '아파트', value: '아파트' },
-                  { label: '오피스텔', value: '오피스텔' },
-                  { label: '분양권', value: '분양권' },
-                  { label: '원룸', value: '원룸' },
-                  { label: '투룸', value: '투룸' },
-                  { label: '주택', value: '주택' },
-                  { label: '빌라', value: '빌라' },
-                  { label: '상가', value: '상가' },
-                  { label: '공장', value: '공장' },
-                  { label: '토지', value: '토지' }
-                ].map((cat) => {
-                  const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
-                  
-                  // Determine if all are selected (in ALL mode, we highlight only '전체' explicitly to show all are selected)
-                  const isAll = activeSubPills.length >= AVAILABLE_CATEGORIES.length || activeSubPills.includes('전체') || selectedCategory === '전체';
-                  
-                  // If '전체' is active, individual items are shown in a neutral state, unless individual buttons are toggled.
-                  const isSelected = !isAll && (activeSubPills.includes(cat.value) || (activeSubPills.includes('아파트 오피스텔') && (cat.value === '아파트' || cat.value === '오피스텔')));
-
-                  return (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() => {
-                        // If '전체' was active (all selected), switch to selecting ONLY this category on click
-                        if (isAll) {
-                          setActiveSubPills([cat.value]);
-                          setSelectedCategory(cat.value as FilterCategory);
-                        } else {
-                          // Toggle logic
-                          let nextPills = [...activeSubPills];
-                          
-                          // Convert legacy merged states if present
-                          if (nextPills.includes('아파트 오피스텔')) {
-                            nextPills = nextPills.filter(p => p !== '아파트 오피스텔');
-                            if (!nextPills.includes('아파트')) nextPills.push('아파트');
-                            if (!nextPills.includes('오피스텔')) nextPills.push('오피스텔');
-                          }
-
-                          if (nextPills.includes(cat.value)) {
-                            // If it's the only one selected, toggling it off selects ALL (전체)
-                            if (nextPills.length <= 1) {
-                              nextPills = AVAILABLE_CATEGORIES;
-                              setSelectedCategory('전체');
-                            } else {
-                              nextPills = nextPills.filter(p => p !== cat.value);
-                              setSelectedCategory(nextPills[0] as FilterCategory);
-                            }
-                          } else {
-                            nextPills.push(cat.value);
-                            if (nextPills.length >= AVAILABLE_CATEGORIES.length) {
-                              setSelectedCategory('전체');
-                            } else {
-                              setSelectedCategory(nextPills[0] as FilterCategory);
-                            }
-                          }
-                          setActiveSubPills(nextPills);
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500 text-slate-950 shadow-sm'
-                          : 'bg-slate-100/60 text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Transaction & Price & Size dropbar */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-6 gap-2" id="naver-dropdowns-bar">
-                
-                {/* Transaction type pill selectors */}
-                <div className="col-span-2 bg-slate-100/80 p-0.5 rounded-xl flex items-center">
-                  {(['전체', '매매', '전세', '월세'] as TransactionType[]).map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => setSelectedTransaction(type)}
-                      className={`flex-1 py-1 rounded-lg text-xs font-bold transition-all text-center cursor-pointer ${
-                        selectedTransaction === type
-                          ? 'bg-white text-slate-950 shadow-xs ring-1 ring-amber-400/20'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
+              {/* Card 1: 아파트 */}
+              <div 
+                onClick={() => handleCategoryCardClick('아파트')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="14" y="4" width="20" height="38" rx="2" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M6 42V16H14" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M34 20H42V42" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M2 42H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <line x1="18" y1="10" x2="22" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="26" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="18" y1="18" x2="22" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="26" y1="18" x2="30" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="18" y1="26" x2="22" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="26" y1="26" x2="30" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="18" y1="34" x2="22" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="26" y1="34" x2="30" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
                 </div>
-
-                {/* Price Limit Selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'price' ? null : 'price')}
-                    className={`w-full px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      priceLimit !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{priceLimit === '전체' ? '가격대' : `${parseInt(priceLimit)/10000}억 이하`}</span>
-                    <span className="text-[9px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeDropdown === 'price' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 가격대', value: '전체' },
-                          { label: '1억 이하', value: '10000' },
-                          { label: '2.5억 이하', value: '25000' },
-                          { label: '4억 이하', value: '40000' },
-                          { label: '6억 이하', value: '60000' },
-                          { label: '10억 이하', value: '100000' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setPriceLimit(opt.value);
-                              setActiveDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                              priceLimit === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Size Limit Selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'size' ? null : 'size')}
-                    className={`w-full px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      sizeRange !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{sizeRange === '전체' ? '면적(평수)' : sizeRange}</span>
-                    <span className="text-[9px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeDropdown === 'size' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 면적', value: '전체' },
-                          { label: '10평대 (10~19평)', value: '10평대' },
-                          { label: '20평대 (20~29평)', value: '20평대' },
-                          { label: '30평대 (30~29평)', value: '30평대' },
-                          { label: '40평대 이상', value: '40평대이상' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setSizeRange(opt.value);
-                              setActiveDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                              sizeRange === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Approved Year Selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'year' ? null : 'year')}
-                    className={`w-full px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      useYear !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{useYear === '전체' ? '연식' : useYear}</span>
-                    <span className="text-[9px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeDropdown === 'year' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 연식', value: '전체' },
-                          { label: '신축급 (5년이내)', value: '5년이내' },
-                          { label: '10년 이내', value: '10년이내' },
-                          { label: '15년 이내', value: '15년이내' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setUseYear(opt.value);
-                              setActiveDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                              useYear === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Household Count Selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'households' ? null : 'households')}
-                    className={`w-full px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      householdCount !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{householdCount === '전체' ? '세대수' : '대단지'}</span>
-                    <span className="text-[9px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeDropdown === 'households' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute right-0 sm:left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 세대수', value: '전체' },
-                          { label: '1000세대 이상 대단지', value: '대단지' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setHouseholdCount(opt.value);
-                              setActiveDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                              householdCount === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Advanced Search toggle panel button */}
-                <button
-                  onClick={() => {
-                    setAdvancedSearch(!advancedSearch);
-                    setActiveDropdown(null);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all ${
-                    advancedSearch || searchQuery !== ''
-                      ? 'bg-amber-100 border border-amber-400/30 text-amber-800'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>키워드</span>
-                </button>
-
-              </div>
-
-              {/* Advanced Search Bar Option (Horizontal expand) */}
-              <AnimatePresence>
-                {(advancedSearch || searchQuery !== '') && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="border-t border-amber-100 pt-3 flex flex-col sm:flex-row gap-3 items-center justify-between overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2 text-xs text-slate-500 font-bold mr-auto">
-                      <Search className="w-4 h-4 text-amber-500 animate-pulse" />
-                      <span>매물명, 단지명 또는 관심 키워드 검색:</span>
-                    </div>
-                    <div className="relative w-full sm:w-80">
-                      <input
-                        type="text"
-                        placeholder="양정, 서면, 한라, 공장, 신축 등으로 검색..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full text-xs bg-white border border-amber-200 rounded-lg pl-3 pr-8 py-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-slate-400 font-bold"
-                      />
-                      {searchQuery ? (
-                        <button 
-                          onClick={() => setSearchQuery('')}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-
-
-              {/* Reset active filtering controllers */}
-              {(selectedCategory !== '아파트 오피스텔' || selectedTransaction !== '전체' || priceLimit !== '전체' || sizeRange !== '전체' || useYear !== '전체' || householdCount !== '전체' || searchQuery !== '') && (
-                <div className="flex justify-between items-center pt-2.5 border-t border-amber-100 text-xs">
-                  <span className="text-slate-400 font-extrabold flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    필터 매물 탐색 가동 중: <span className="text-amber-600 font-black">{filteredProperties.length}개 매물</span>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">아파트</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
                   </span>
-                  <button 
-                    onClick={() => {
-                      setSelectedCategory('아파트 오피스텔');
-                      setActiveSubPills(['아파트 오피스텔']);
-                      setSelectedTransaction('전체');
-                      setPriceLimit('전체');
-                      setSizeRange('전체');
-                      setUseYear('전체');
-                      setHouseholdCount('전체');
-                      setSearchQuery('');
-                      setAdvancedSearch(false);
-                      setActiveDropdown(null);
-                    }}
-                    className="text-xs text-amber-600 hover:text-amber-700 font-black flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    모든 필터 초기화
-                    <X className="w-3.5 h-3.5 text-red-500" />
-                  </button>
                 </div>
-              )}
+              </div>
+
+              {/* Card 2: 오피스텔 */}
+              <div 
+                onClick={() => handleCategoryCardClick('오피스텔')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 44V4L32 8V44" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                    <path d="M6 44H42" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M21 12H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M21 20H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M21 28H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M21 36H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">오피스텔</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: 분양권 */}
+              <div 
+                onClick={() => handleCategoryCardClick('분양권')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="8" y="4" width="32" height="40" rx="3" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M14 12H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M14 20H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M14 28H26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <circle cx="32" cy="28" r="3" fill="currentColor" />
+                    <path d="M12 36H36" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">분양권</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: 원룸·투룸 */}
+              <div 
+                onClick={() => handleCategoryCardClick('원룸·투룸')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M24 6V42" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
+                    <circle cx="15" cy="15" r="2.5" fill="currentColor" />
+                    <circle cx="33" cy="15" r="2.5" fill="currentColor" />
+                    <path d="M11 28H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M29 28H37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M11 34H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M29 34H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">원룸·투룸</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 5: 빌라 */}
+              <div 
+                onClick={() => handleCategoryCardClick('빌라')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="8" y="14" width="32" height="28" rx="2" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M4 14L24 4L44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <rect x="14" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <rect x="28" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <rect x="14" y="32" width="6" height="10" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <rect x="28" y="32" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">빌라</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 6: 주택 */}
+              <div 
+                onClick={() => handleCategoryCardClick('주택')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 20V42H42V20" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                    <path d="M3 22L24 6L45 22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M1 42H47" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <rect x="15" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <rect x="27" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <path d="M21 34H27V42H21V34Z" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">주택</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 7: 상가 */}
+              <div 
+                onClick={() => handleCategoryCardClick('상가')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 40V14H42V40" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M4 14C4 10 12 10 12 14C12 10 20 10 20 14C20 10 28 10 28 14C28 10 36 10 36 14C36 10 44 10 44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
+                    <rect x="12" y="24" width="8" height="10" rx="1" stroke="currentColor" strokeWidth="2" />
+                    <rect x="28" y="24" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                    <path d="M2 40H46" stroke="currentColor" strokeWidth="2.5" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">상가</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 8: 공장 */}
+              <div 
+                onClick={() => handleCategoryCardClick('공장')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 14V40H44V26L32 14L20 26L4 14Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
+                    <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <rect x="10" y="24" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
+                    <rect x="22" y="28" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
+                    <path d="M34 18H38" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">공장</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 9: 토지 */}
+              <div 
+                onClick={() => handleCategoryCardClick('토지')}
+                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+              >
+                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 38C14 30 34 30 42 38" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
+                    <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <line x1="38" y1="10" x2="26" y2="24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M35 7L41 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M28 22L20 28L18 34L26 31L30 24Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
+                  </svg>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">토지</span>
+                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                    <span>클릭</span>
+                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                </div>
+              </div>
 
             </div>
-          </motion.div>
+          </div>
           {/* Close Left Box Column */}
           </div>
 
@@ -2579,9 +2494,328 @@ export default function App() {
       {/* ==========================================
           MAIN AREA: GRID LISTINGS & CONSULT SIDEBAR
           ========================================== */}
-      <main className={`${viewMode === 'map' ? 'max-w-none w-full px-4 sm:px-6 lg:px-8 xl:px-12' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} py-8 flex-grow`} id="listings-section">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow border-t border-amber-100/40" id="listings-section">
         <div className="flex flex-col gap-6">
-          
+
+          {/* ==========================================
+              STICKY FILTER COMPONENT (Pins right under header on scroll)
+              ========================================== */}
+          <div className="sticky top-[60px] sm:top-[72px] lg:top-[73px] z-35 bg-white/95 backdrop-blur-md border border-amber-200/50 sm:rounded-2xl shadow-md p-3 flex flex-col gap-3 mb-2 -mx-4 sm:mx-0">
+            {/* Top row: Horizontal scrollable Category pills */}
+            <div className="flex items-center justify-between gap-3 border-b border-amber-100/50 pb-2">
+              <span className="text-[11px] font-black text-slate-800 flex items-center gap-1 shrink-0">
+                <Filter className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                <span>간편 필터</span>
+              </span>
+              
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-grow pr-1">
+                {/* '전체' Category button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+                    setActiveSubPills(AVAILABLE_CATEGORIES);
+                    setSelectedCategory('전체');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shrink-0 cursor-pointer ${
+                    (activeSubPills.length >= 10 || activeSubPills.includes('전체') || selectedCategory === '전체')
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:text-slate-950 hover:bg-slate-200'
+                  }`}
+                >
+                  전체
+                </button>
+
+                {[
+                  { label: '아파트', value: '아파트' },
+                  { label: '오피스텔', value: '오피스텔' },
+                  { label: '분양권', value: '분양권' },
+                  { label: '원룸', value: '원룸' },
+                  { label: '투룸', value: '투룸' },
+                  { label: '주택', value: '주택' },
+                  { label: '빌라', value: '빌라' },
+                  { label: '상가', value: '상가' },
+                  { label: '공장', value: '공장' },
+                  { label: '토지', value: '토지' }
+                ].map((cat) => {
+                  const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+                  const isAll = activeSubPills.length >= AVAILABLE_CATEGORIES.length || activeSubPills.includes('전체') || selectedCategory === '전체';
+                  const isSelected = !isAll && (activeSubPills.includes(cat.value) || (activeSubPills.includes('아파트 오피스텔') && (cat.value === '아파트' || cat.value === '오피스텔')));
+
+                  return (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => {
+                        if (isAll) {
+                          setActiveSubPills([cat.value]);
+                          setSelectedCategory(cat.value as FilterCategory);
+                        } else {
+                          let nextPills = [...activeSubPills];
+                          if (nextPills.includes('아파트 오피스텔')) {
+                            nextPills = nextPills.filter(p => p !== '아파트 오피스텔');
+                            if (!nextPills.includes('아파트')) nextPills.push('아파트');
+                            if (!nextPills.includes('오피스텔')) nextPills.push('오피스텔');
+                          }
+                          if (nextPills.includes(cat.value)) {
+                            if (nextPills.length <= 1) {
+                              nextPills = AVAILABLE_CATEGORIES;
+                              setSelectedCategory('전체');
+                            } else {
+                              nextPills = nextPills.filter(p => p !== cat.value);
+                              setSelectedCategory(nextPills[0] as FilterCategory);
+                            }
+                          } else {
+                            nextPills.push(cat.value);
+                            if (nextPills.length >= AVAILABLE_CATEGORIES.length) {
+                              setSelectedCategory('전체');
+                            } else {
+                              setSelectedCategory(cat.value as FilterCategory);
+                            }
+                          }
+                          setActiveSubPills(nextPills);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:text-slate-950 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom row: Compact Dropdowns & Transaction type pills */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-2 flex-grow">
+                {/* Transaction type pill selectors */}
+                <div className="bg-slate-100 p-0.5 rounded-xl flex items-center min-w-[150px] sm:min-w-[170px] shrink-0">
+                  {(['전체', '매매', '전세', '월세'] as TransactionType[]).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedTransaction(type)}
+                      className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-all text-center cursor-pointer ${
+                        selectedTransaction === type
+                          ? 'bg-white text-slate-950 shadow-xs ring-1 ring-amber-400/20'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Price Limit Selector */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'price' ? null : 'price')}
+                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
+                      priceLimit !== '전체'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{priceLimit === '전체' ? '가격대' : `${parseInt(priceLimit)/10000}억 이하`}</span>
+                    <span className="text-[8px] text-slate-400">▼</span>
+                  </button>
+                  <AnimatePresence>
+                    {activeStickyDropdown === 'price' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
+                      >
+                        {[
+                          { label: '전체 가격대', value: '전체' },
+                          { label: '1억 이하', value: '10000' },
+                          { label: '2.5억 이하', value: '25000' },
+                          { label: '4억 이하', value: '40000' },
+                          { label: '6억 이하', value: '60000' },
+                          { label: '10억 이하', value: '100000' }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              setPriceLimit(opt.value);
+                              setActiveStickyDropdown(null);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
+                              priceLimit === opt.value
+                                ? 'bg-amber-100 text-amber-850'
+                                : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Size Limit Selector */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'size' ? null : 'size')}
+                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
+                      sizeRange !== '전체'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{sizeRange === '전체' ? '면적(평수)' : sizeRange}</span>
+                    <span className="text-[8px] text-slate-400">▼</span>
+                  </button>
+                  <AnimatePresence>
+                    {activeStickyDropdown === 'size' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
+                      >
+                        {[
+                          { label: '전체 면적', value: '전체' },
+                          { label: '10평대 (10~19평)', value: '10평대' },
+                          { label: '20평대 (20~29평)', value: '20평대' },
+                          { label: '30평대 (30~29평)', value: '30평대' },
+                          { label: '40평대 이상', value: '40평대이상' }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              setSizeRange(opt.value);
+                              setActiveStickyDropdown(null);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
+                              sizeRange === opt.value
+                                ? 'bg-amber-100 text-amber-850'
+                                : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Approved Year and Household Selector */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'year' ? null : 'year')}
+                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
+                      useYear !== '전체' || householdCount !== '전체'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{useYear === '전체' ? (householdCount === '전체' ? '연식/단지' : '대단지') : useYear}</span>
+                    <span className="text-[8px] text-slate-400">▼</span>
+                  </button>
+                  <AnimatePresence>
+                    {activeStickyDropdown === 'year' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
+                      >
+                        {[
+                          { label: '전체 연식', value: '전체' },
+                          { label: '5년이내 신축', value: '5년이내' },
+                          { label: '10년 이내', value: '10년이내' }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              setUseYear(opt.value);
+                              setActiveStickyDropdown(null);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
+                              useYear === opt.value
+                                ? 'bg-amber-100 text-amber-850'
+                                : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                        <div className="h-[1px] bg-slate-100 my-1" />
+                        {[
+                          { label: '전체 세대수', value: '전체' },
+                          { label: '대단지 (1000세대+)', value: '대단지' }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              setHouseholdCount(opt.value);
+                              setActiveStickyDropdown(null);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
+                              householdCount === opt.value
+                                ? 'bg-amber-100 text-amber-850'
+                                : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Keyword Search Input */}
+                <div className="relative min-w-[155px] sm:min-w-[175px] max-w-[260px] flex-grow">
+                  <input
+                    type="text"
+                    placeholder="단지명, 매물 키워드 검색..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full text-[11px] bg-slate-50 border border-slate-200 hover:border-amber-200 focus:border-amber-400 rounded-xl pl-3 pr-8 py-1.5 text-slate-800 placeholder-slate-400 font-bold focus:outline-none transition-all"
+                  />
+                  {searchQuery ? (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-600 focus:outline-none cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  ) : (
+                    <Search className="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+                  )}
+                </div>
+              </div>
+
+              {/* Reset filter button */}
+              {(selectedCategory !== '전체' || selectedTransaction !== '전체' || priceLimit !== '전체' || sizeRange !== '전체' || useYear !== '전체' || householdCount !== '전체' || searchQuery !== '') && (
+                <button
+                  onClick={() => {
+                    setSelectedCategory('전체');
+                    setActiveSubPills(['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지']);
+                    setSelectedTransaction('전체');
+                    setPriceLimit('전체');
+                    setSizeRange('전체');
+                    setUseYear('전체');
+                    setHouseholdCount('전체');
+                    setSearchQuery('');
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin-slow" />
+                  <span>필터 초기화</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Properties Listings Grid (full width) */}
           <div className="w-full flex flex-col gap-6" id="listings-container">
             
@@ -3097,7 +3331,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch bg-white rounded-3xl p-3 border border-amber-200/50 shadow-xs">
                 
                 {/* Right Listing Feed: Compact horizontal row items (lg:col-span-3, order-2) */}
-                <div id="map-listing-feed-container" className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[450px] lg:max-h-[780px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                <div id="map-listing-feed-container" className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[380px] lg:max-h-[580px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                   <div className="bg-amber-50/50 text-slate-600 text-[11px] font-bold p-3 rounded-xl border border-amber-100/60 flex items-center gap-2 justify-center">
                     <Info className="w-4 h-4 text-amber-500 animate-bounce" />
                     <span>원하는 매물을 클릭하면 지도가 알아서 움직입니다.</span>
@@ -3229,7 +3463,7 @@ export default function App() {
                 </div>
 
                 {/* Left Interactive Kakao Map Panel (lg:col-span-9, order-1) */}
-                <div className="order-1 lg:order-1 lg:col-span-9 h-[450px] lg:h-[780px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
+                <div className="order-1 lg:order-1 lg:col-span-9 h-[380px] lg:h-[580px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
                   {/* Map Header Diagnostics & Controls */}
                   <div className="absolute top-3 left-3 right-4 z-30 flex flex-wrap gap-2 items-center justify-between pointer-events-none">
                     {/* Left: Troubleshooting Button */}
@@ -3961,9 +4195,10 @@ export default function App() {
               </div>
             ) : (
               /* Original Grid View Layout */
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <AnimatePresence mode="popLayout">
-                  {filteredProperties.map((prop, index) => {
+              <div className="flex flex-col gap-8 animate-fadeIn">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <AnimatePresence mode="popLayout">
+                    {paginatedProperties.map((prop, index) => {
                     const isFavorite = favorites.includes(prop.id);
                     return (
                       <motion.article
@@ -4099,6 +4334,77 @@ export default function App() {
                   })}
                 </AnimatePresence>
               </div>
+
+              {/* Grid View Pagination Controls */}
+              {Math.ceil(filteredProperties.length / 12) > 1 && (
+                <div className="flex items-center justify-center gap-1.5 mt-4 flex-wrap">
+                  {/* Previous Page Button */}
+                  <button
+                    onClick={() => {
+                      if (gridPage > 1) {
+                        setGridPage(gridPage - 1);
+                        setTimeout(() => {
+                          document.getElementById('listings-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 50);
+                      }
+                    }}
+                    disabled={gridPage === 1}
+                    className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                      gridPage === 1 
+                        ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed'
+                        : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:text-slate-900 active:scale-95'
+                    }`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {/* Page Numbers */}
+                  {Array.from({ length: Math.ceil(filteredProperties.length / 12) }).map((_, i) => {
+                    const p = i + 1;
+                    const isSelected = gridPage === p;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => {
+                          setGridPage(p);
+                          setTimeout(() => {
+                            document.getElementById('listings-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }, 50);
+                        }}
+                        className={`w-10 h-10 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-400/30 shadow-xs'
+                            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+
+                  {/* Next Page Button */}
+                  <button
+                    onClick={() => {
+                      const totalP = Math.ceil(filteredProperties.length / 12);
+                      if (gridPage < totalP) {
+                        setGridPage(gridPage + 1);
+                        setTimeout(() => {
+                          document.getElementById('listings-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 50);
+                      }
+                    }}
+                    disabled={gridPage === Math.ceil(filteredProperties.length / 12)}
+                    className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                      gridPage === Math.ceil(filteredProperties.length / 12)
+                        ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed'
+                        : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:text-slate-900 active:scale-95'
+                    }`}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
             )}
           </div>
 
