@@ -116,8 +116,8 @@ testConnection();
 // ==========================================
 
 export type TransactionType = '전체' | '매매' | '전세' | '월세';
-export type FilterCategory = '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔';
-export type ActiveTabType = '매물검색' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔' | '오시는길' | '매물접수';
+export type FilterCategory = '전체' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔';
+export type ActiveTabType = '매물검색' | '전체' | '아파트' | '오피스텔' | '분양권' | '원룸' | '투룸' | '주택' | '빌라' | '상가' | '공장' | '토지' | '아파트 오피스텔' | '오시는길' | '매물접수';
 
 export interface Property {
   id: string;
@@ -386,7 +386,7 @@ const INITIAL_PROPERTIES: Property[] = [
 const PropertyDetailTable = ({ data }: { data: Property }) => (
   <div id="capture_area" className="w-[520px] bg-white p-5 border border-amber-200 shadow-xl rounded-2xl">
     <div className="bg-amber-600 text-white p-4 text-center font-black text-lg tracking-tight rounded-t-xl mb-4">
-      🏠 부강공인중개사사무소 ・ 매물번호: {data.id}
+      🏠 부강부동산 ・ 매물번호: {data.id}
     </div>
     <table className="w-full text-xs border-collapse border border-amber-200">
       <tbody>
@@ -1383,17 +1383,31 @@ export default function App() {
   const filteredProperties = useMemo(() => {
     return properties.filter(prop => {
       
-      // 1. Primary Category Filter System (Using activeSubPills for robust syncing)
+      // 1. Primary Category Filter System (Using activeSubPills for robust syncing and multi-select support)
       if (activeSubPills && activeSubPills.length > 0) {
-        if (activeSubPills.includes('아파트 오피스텔')) {
-          if (prop.category !== '아파트' && prop.category !== '오피스텔') return false;
-        } else {
-          if (!activeSubPills.includes(prop.category)) return false;
+        // Build resolved categories array
+        const resolvedCategories: string[] = [];
+        activeSubPills.forEach(p => {
+          if (p === '아파트 오피스텔') {
+            resolvedCategories.push('아파트', '오피스텔');
+          } else if (p === '전체') {
+            resolvedCategories.push('아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지');
+          } else {
+            resolvedCategories.push(p);
+          }
+        });
+        
+        // If not all are selected and '전체' is not explicitly selected
+        const allPossible = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+        const isAllActive = resolvedCategories.includes('전체') || allPossible.every(cat => resolvedCategories.includes(cat));
+        
+        if (!isAllActive) {
+          if (!resolvedCategories.includes(prop.category)) return false;
         }
       } else if (selectedCategory) {
         if (selectedCategory === '아파트 오피스텔') {
           if (prop.category !== '아파트' && prop.category !== '오피스텔') return false;
-        } else {
+        } else if (selectedCategory !== '전체') {
           if (prop.category !== selectedCategory) return false;
         }
       }
@@ -1457,6 +1471,34 @@ export default function App() {
     });
   }, [properties, selectedCategory, activeSubPills, selectedTransaction, priceLimit, sizeRange, useYear, householdCount, searchQuery, favorites]);
 
+  // Compute elegant visual label text representing all active categories
+  const displayedCategoryText = useMemo(() => {
+    const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+    if (!activeSubPills || activeSubPills.length === 0) return '전체';
+    if (activeSubPills.includes('전체') || activeSubPills.length >= AVAILABLE_CATEGORIES.length) {
+      return '전체';
+    }
+    if (activeSubPills.includes('아파트 오피스텔') && activeSubPills.length === 1) {
+      return '아파트·오피스텔';
+    }
+    
+    // Build unique sorted list of displayed labels based on original order
+    const displayList: string[] = [];
+    AVAILABLE_CATEGORIES.forEach(cat => {
+      if (activeSubPills.includes(cat)) {
+        displayList.push(cat);
+      }
+    });
+    
+    if (activeSubPills.includes('아파트 오피스텔')) {
+      if (!displayList.includes('아파트')) displayList.push('아파트');
+      if (!displayList.includes('오피스텔')) displayList.push('오피스텔');
+    }
+
+    if (displayList.length >= AVAILABLE_CATEGORIES.length || displayList.length === 0) return '전체';
+    return displayList.join('·');
+  }, [activeSubPills]);
+
   // Combine filtered properties and active registration preview marker for all map rendering
   const allMapProperties = useMemo(() => {
     const list = [...filteredProperties];
@@ -1506,6 +1548,95 @@ export default function App() {
     return list;
   }, [filteredProperties, showAddForm, newProp.mapLat, newProp.mapLng, newProp.name, newProp.category, newProp.transactionType, newProp.priceText, newProp.priceValue, newProp.pyongValue, newProp.floorText, newProp.direction, newProp.location, newProp.fullAddr]);
 
+  // Dynamic clustering memo based on zoom level (mapLevel)
+  const clusteredProperties = useMemo(() => {
+    // Zoom levels below 5 will display individual markers and overlays normally
+    if (mapLevel < 5) {
+      return allMapProperties.map(prop => ({
+        isCluster: false,
+        count: 1,
+        centerLat: Number(prop.latitude !== undefined && prop.latitude !== null ? prop.latitude : prop.mapLat) || 35.151261,
+        centerLng: Number(prop.longitude !== undefined && prop.longitude !== null ? prop.longitude : prop.mapLng) || 129.029706,
+        items: [prop],
+        id: `single-${prop.id}`,
+        prop: prop
+      }));
+    }
+
+    // Zoom level >= 5 uses our robust proximity clustering calculation
+    // Proximity threshold escalates dynamically with zoom out levels to cover wider geographic area
+    const threshold = 0.00018 * Math.pow(2.15, mapLevel);
+    const clusters: {
+      isCluster: boolean;
+      count: number;
+      centerLat: number;
+      centerLng: number;
+      items: any[];
+      id: string;
+      prop?: any;
+    }[] = [];
+
+    allMapProperties.forEach(prop => {
+      let propLat = Number(prop.latitude !== undefined && prop.latitude !== null ? prop.latitude : prop.mapLat);
+      let propLng = Number(prop.longitude !== undefined && prop.longitude !== null ? prop.longitude : prop.mapLng);
+      if (isNaN(propLat) || propLat <= 0) propLat = 35.151261;
+      if (isNaN(propLng) || propLng <= 0) propLng = 129.029706;
+
+      // Always keep the add-form active preview out of clusters for best user feedback
+      if (prop.id === 'new-prop-preview') {
+        clusters.push({
+          isCluster: false,
+          count: 1,
+          centerLat: propLat,
+          centerLng: propLng,
+          items: [prop],
+          id: 'new-prop-preview-group',
+          prop
+        });
+        return;
+      }
+
+      // Check if this point falls into any existing cluster boundary
+      const matchingCluster = clusters.find(c => {
+        if (c.id === 'new-prop-preview-group') return false; // never group preview with actual listings
+        const dLat = Math.abs(c.centerLat - propLat);
+        const dLng = Math.abs(c.centerLng - propLng);
+        return dLat < threshold && dLng < threshold;
+      });
+
+      if (matchingCluster) {
+        matchingCluster.items.push(prop);
+        matchingCluster.count += 1;
+        matchingCluster.isCluster = true;
+        
+        // Recalculate cluster center as geometric average of its members
+        const totalCount = matchingCluster.items.length;
+        let sumLat = 0;
+        let sumLng = 0;
+        matchingCluster.items.forEach(itm => {
+          let itmLat = Number(itm.latitude !== undefined && itm.latitude !== null ? itm.latitude : itm.mapLat) || 35.151261;
+          let itmLng = Number(itm.longitude !== undefined && itm.longitude !== null ? itm.longitude : itm.mapLng) || 129.029706;
+          sumLat += itmLat;
+          sumLng += itmLng;
+        });
+        matchingCluster.centerLat = sumLat / totalCount;
+        matchingCluster.centerLng = sumLng / totalCount;
+      } else {
+        clusters.push({
+          isCluster: false,
+          count: 1,
+          centerLat: propLat,
+          centerLng: propLng,
+          items: [prop],
+          id: `cluster-group-${prop.id}`,
+          prop: prop
+        });
+      }
+    });
+
+    return clusters;
+  }, [allMapProperties, mapLevel]);
+
   // Dynamic Map Auto Centering based on filtered items, mimicking Naver Real Estate
   useEffect(() => {
     // 1. If currently in the registration form and valid preview coordinates exist, prioritize centering on the new preview marker!
@@ -1538,6 +1669,16 @@ export default function App() {
       }
     }
   }, [filteredProperties, activeMarkerId, showAddForm, newProp.mapLat, newProp.mapLng, properties]);
+
+  // Scroll the listing feed to align with the active property when a map marker is clicked
+  useEffect(() => {
+    if (activeMarkerId) {
+      const element = document.getElementById(`map-property-${activeMarkerId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [activeMarkerId]);
 
   // Dynamically load Kakao Maps API via react-kakao-maps-sdk's built-in useKakaoLoader hook
   // Support both standard hardcoded key and custom env overrides for maximum versatility
@@ -1691,12 +1832,18 @@ export default function App() {
               className="flex items-center gap-2 cursor-pointer group"
               id="header-logo-area"
             >
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center p-1 border border-amber-300/30 shadow-xs group-hover:scale-105 transition-transform">
-                <Building className="w-6 h-6 text-amber-600" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-amber-400 to-amber-600 flex items-center justify-center border border-amber-300/30 shadow-md group-hover:scale-105 transition-all duration-300">
+                <svg className="w-6 h-6 text-slate-950" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Modern Luxury Real Estate Concept Logo */}
+                  <path d="M15 50L50 15L85 50" stroke="currentColor" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M28 50V75C28 77.2091 29.7909 79 32 79H68C70.2091 79 72 77.2091 72 75V50" stroke="currentColor" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
+                  <rect x="42" y="45" width="16" height="24" rx="4" fill="currentColor" />
+                  <path d="M50 8L52.5 13.5L58.5 14L54 18L55.5 24L50 21L44.5 24L46 18L41.5 14L47.5 13.5L50 8Z" fill="currentColor" />
+                </svg>
               </div>
               <div className="flex flex-col">
                 <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">
-                  부강공인중개사사무소
+                  부강부동산
                 </span>
                 <span className="text-[10px] font-extrabold text-neutral-400 tracking-wider">
                   전문 중개 ・ 자문 컨설팅
@@ -1884,40 +2031,62 @@ export default function App() {
           HERO SECTION: GOLDEN SUNSHINE
           ========================================== */}
       <section className="relative bg-gradient-to-b from-amber-100/40 via-amber-200/10 to-transparent border-b border-amber-100 py-12 md:py-16">
-        <div className="max-w-7xl mx-auto px-4 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100/60 text-amber-800 border border-amber-200/50 text-xs font-extrabold mb-4"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>부산진구 전문 공인중개사사무소</span>
-          </motion.div>
+          {/* Top content layout: Titles & Filter Station on Left, Consultation on Right */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-10">
+            <div className="lg:col-span-7 xl:col-span-8 text-left flex flex-col justify-end gap-5">
+              <div>
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100/60 text-amber-800 border border-amber-200/50 text-xs font-extrabold mb-4"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>부산진구 전문 공인중개사사무소</span>
+                </motion.div>
 
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 leading-tight mb-4">
-            부산진구 매물, <span className="text-amber-600 underline decoration-amber-300">한눈에 찾기</span>
-          </h1>
-          
-          <p className="text-slate-500 text-xs sm:text-sm font-bold max-w-xl mx-auto leading-relaxed mb-8">
-            양정, 개금, 서면, 범천동 아파트부터 분양권, 공장/토지 매물까지!<br />
-            실제 매매 시세에 기반한 완벽한 허위매물 제로 100% 실매물로 매칭합니다.
-          </p>
+                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 leading-tight mb-4 animate-fade-in">
+                  부산진구 매물, <span className="text-amber-600 underline decoration-amber-300">한눈에 찾기</span>
+                </h1>
+                
+                <p className="text-xs sm:text-sm md:text-base font-bold leading-relaxed text-slate-500">
+                  양정, 개금, 서면, 범천동 아파트부터 분양권, 공장/토지 매물까지!<br />
+                  실제 매매 시세에 기반한 완벽한 허위매물 제로 100% 실매물로 매칭합니다.
+                </p>
+              </div>
 
           {/* ==========================================
-              NAVER REAL ESTATE STYLE FILTER STATION (Frosted Card)
+              NAVER REAL ESTATE STYLE FILTER STATION (Frosted Card - placed in Left Column)
               ========================================== */}
           <motion.div 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="max-w-4xl mx-auto bg-white/85 backdrop-blur-lg rounded-2xl shadow-xl border border-amber-200/60 p-4 sm:p-5"
+            className="w-full bg-white/85 backdrop-blur-lg rounded-2xl shadow-xl border border-amber-200/60 p-4 sm:p-5 text-left"
             id="naver-filter-station"
           >
             <div className="flex flex-col gap-4">
               
-              {/* Category selector row */}
+              {/* Category selector row with "전체" and multi-selection support */}
               <div className="flex flex-wrap items-center gap-1.5 border-b border-amber-150/40 pb-3 h-auto max-h-[120px] overflow-y-auto" id="naver-main-categories">
+                {/* '전체' (All) Category Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+                    setActiveSubPills(AVAILABLE_CATEGORIES);
+                    setSelectedCategory('전체');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    (activeSubPills.length >= 10 || activeSubPills.includes('전체') || selectedCategory === '전체')
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-100/60 text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
+                  }`}
+                >
+                  전체
+                </button>
+
                 {[
                   { label: '아파트', value: '아파트' },
                   { label: '오피스텔', value: '오피스텔' },
@@ -1929,22 +2098,65 @@ export default function App() {
                   { label: '상가', value: '상가' },
                   { label: '공장', value: '공장' },
                   { label: '토지', value: '토지' }
-                ].map((cat) => (
-                  <button
-                    key={cat.value}
-                    onClick={() => {
-                      setSelectedCategory(cat.value as FilterCategory);
-                      setActiveSubPills([cat.value]);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                      selectedCategory === cat.value
-                        ? 'bg-amber-500 text-slate-950 shadow-sm'
-                        : 'bg-slate-100/60 text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
+                ].map((cat) => {
+                  const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
+                  
+                  // Determine if all are selected (in ALL mode, we highlight only '전체' explicitly to show all are selected)
+                  const isAll = activeSubPills.length >= AVAILABLE_CATEGORIES.length || activeSubPills.includes('전체') || selectedCategory === '전체';
+                  
+                  // If '전체' is active, individual items are shown in a neutral state, unless individual buttons are toggled.
+                  const isSelected = !isAll && (activeSubPills.includes(cat.value) || (activeSubPills.includes('아파트 오피스텔') && (cat.value === '아파트' || cat.value === '오피스텔')));
+
+                  return (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => {
+                        // If '전체' was active (all selected), switch to selecting ONLY this category on click
+                        if (isAll) {
+                          setActiveSubPills([cat.value]);
+                          setSelectedCategory(cat.value as FilterCategory);
+                        } else {
+                          // Toggle logic
+                          let nextPills = [...activeSubPills];
+                          
+                          // Convert legacy merged states if present
+                          if (nextPills.includes('아파트 오피스텔')) {
+                            nextPills = nextPills.filter(p => p !== '아파트 오피스텔');
+                            if (!nextPills.includes('아파트')) nextPills.push('아파트');
+                            if (!nextPills.includes('오피스텔')) nextPills.push('오피스텔');
+                          }
+
+                          if (nextPills.includes(cat.value)) {
+                            // If it's the only one selected, toggling it off selects ALL (전체)
+                            if (nextPills.length <= 1) {
+                              nextPills = AVAILABLE_CATEGORIES;
+                              setSelectedCategory('전체');
+                            } else {
+                              nextPills = nextPills.filter(p => p !== cat.value);
+                              setSelectedCategory(nextPills[0] as FilterCategory);
+                            }
+                          } else {
+                            nextPills.push(cat.value);
+                            if (nextPills.length >= AVAILABLE_CATEGORIES.length) {
+                              setSelectedCategory('전체');
+                            } else {
+                              setSelectedCategory(nextPills[0] as FilterCategory);
+                            }
+                          }
+                          setActiveSubPills(nextPills);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-100/60 text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Transaction & Price & Size dropbar */}
@@ -2242,8 +2454,85 @@ export default function App() {
 
             </div>
           </motion.div>
+          {/* Close Left Box Column */}
+          </div>
+
+          {/* Right Box: Online Consultation Form (Aligns perfectly at the bottom with Left Columns filters) */}
+          <div className="lg:col-span-5 xl:col-span-4 w-full flex flex-col justify-end text-left" id="inquiry-section">
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-4 text-left h-full justify-between">
+              <div>
+                <div className="border-b border-amber-100 pb-3 mb-4">
+                  <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base shadow-xs">
+                    <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
+                    <span>실시간 온라인 상담 신청</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
+                    남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
+                  </p>
+                </div>
+
+                <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+                  <input
+                    type="text"
+                    placeholder="성함"
+                    value={consultName}
+                    onChange={(e) => setConsultName(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+
+                  <input
+                    type="tel"
+                    placeholder="연락처"
+                    value={consultPhone}
+                    onChange={(e) => setConsultPhone(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+
+                  <select
+                    value={consultType}
+                    onChange={(e) => setConsultType(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                  >
+                    <option value="매수문의">매수 문의</option>
+                    <option value="매도문의">매도 문의</option>
+                    <option value="매물접수">매물 접수</option>
+                    <option value="상담문의">일반 상담</option>
+                  </select>
+
+                  <textarea
+                    placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+                    value={consultText}
+                    onChange={(e) => setConsultText(e.target.value)}
+                    rows={3}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-xl transition-colors cursor-pointer text-xs"
+                  >
+                    상담 신청 보내기
+                  </button>
+                </form>
+              </div>
+
+              <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-center mt-3">
+                <div className="flex-1">
+                  <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+                  <div className="text-xs font-black text-slate-800">14건</div>
+                </div>
+                <div className="w-px h-6 bg-slate-200" />
+                <div className="flex-1">
+                  <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+                  <div className="text-xs font-black text-amber-600">30분 내</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </section>
+      </div>
+    </section>
 
       {/* ==========================================
           QUICK ACCORD PRESETS (Bento Bar Style)
@@ -2291,16 +2580,16 @@ export default function App() {
           MAIN AREA: GRID LISTINGS & CONSULT SIDEBAR
           ========================================== */}
       <main className={`${viewMode === 'map' ? 'max-w-none w-full px-4 sm:px-6 lg:px-8 xl:px-12' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} py-8 flex-grow`} id="listings-section">
-        <div className={viewMode === 'map' ? 'flex flex-col gap-6' : 'grid grid-cols-1 lg:grid-cols-4 gap-8'}>
+        <div className="flex flex-col gap-6">
           
-          {/* Properties Listings Grid (3/4 column or full width if viewMode === 'map') */}
-          <div className={viewMode === 'map' ? 'w-full flex flex-col gap-6' : 'lg:col-span-3 flex flex-col gap-6'} id="listings-container">
+          {/* Properties Listings Grid (full width) */}
+          <div className="w-full flex flex-col gap-6" id="listings-container">
             
             {/* Title / Info row with View Mode Toggles */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-amber-100 pb-3.5 gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-lg font-black text-slate-900 tracking-tight">
-                  {selectedCategory} 매물 목록
+                  {displayedCategoryText} 매물 목록
                 </span>
                 <span className="bg-amber-100 text-amber-800 text-[11px] font-black px-2 py-0.5 rounded-full">
                   실시간 {filteredProperties.length}개 발견
@@ -2808,7 +3097,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch bg-white rounded-3xl p-3 border border-amber-200/50 shadow-xs">
                 
                 {/* Right Listing Feed: Compact horizontal row items (lg:col-span-3, order-2) */}
-                <div className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[450px] lg:max-h-[780px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                <div id="map-listing-feed-container" className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[450px] lg:max-h-[780px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                   <div className="bg-amber-50/50 text-slate-600 text-[11px] font-bold p-3 rounded-xl border border-amber-100/60 flex items-center gap-2 justify-center">
                     <Info className="w-4 h-4 text-amber-500 animate-bounce" />
                     <span>원하는 매물을 클릭하면 지도가 알아서 움직입니다.</span>
@@ -2820,119 +3109,122 @@ export default function App() {
                       const isHovered = hoveredPropertyId === prop.id;
                       const isActive = activeMarkerId === prop.id;
 
-                      return (
-                        <motion.div
-                          key={prop.id}
-                          layout
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.15) }}
-                          className={`group p-3 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 relative bg-white ${
-                            isHovered || isActive
-                              ? 'border-amber-400 bg-amber-50/20 shadow-sm ring-1 ring-amber-400/20'
-                              : 'border-slate-100 hover:border-amber-300 hover:bg-slate-55/35'
-                          }`}
-                          onMouseEnter={() => setHoveredPropertyId(prop.id)}
-                          onMouseLeave={() => setHoveredPropertyId(null)}
-                          onClick={() => {
-                            setMapCenter({ lat: prop.mapLat, lng: prop.mapLng });
-                            setActiveMarkerId(prop.id);
-                          }}
-                          id={`map-property-${prop.id}`}
-                        >
-                          {/* Image container on Left */}
-                          <div className="w-24 sm:w-28 h-20 sm:h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 relative shadow-inner">
-                            <img
-                              src={prop.imageUrl}
-                              alt={prop.name}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                            {/* Category Badge */}
-                            <span className="absolute left-1 top-1 bg-slate-950/80 backdrop-blur-xs text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
-                              {prop.category}
-                            </span>
-                          </div>
+                        return (
+                          <motion.div
+                            key={prop.id}
+                            layout
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.15) }}
+                            className={`group p-3 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 relative bg-white ${
+                              isActive
+                                ? 'border-2 border-amber-500 bg-amber-50/40 shadow-md ring-4 ring-amber-400/50 scale-[1.01] z-10'
+                                : isHovered
+                                ? 'border border-amber-400 bg-amber-50/10 shadow-sm ring-1 ring-amber-400/10'
+                                : 'border border-slate-100 hover:border-amber-300 hover:bg-slate-55/35'
+                            }`}
+                            onMouseEnter={() => setHoveredPropertyId(prop.id)}
+                            onMouseLeave={() => setHoveredPropertyId(null)}
+                            onClick={() => {
+                              setMapCenter({ lat: prop.mapLat, lng: prop.mapLng });
+                              setActiveMarkerId(prop.id);
+                            }}
+                            id={`map-property-${prop.id}`}
+                          >
+                            {/* Image container on Left */}
+                            <div className="w-24 sm:w-28 h-20 sm:h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 relative shadow-inner">
+                              <img
+                                src={prop.imageUrl}
+                                alt={prop.name}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                              {/* Category Badge */}
+                              <span className="absolute left-1 top-1 bg-slate-950/80 backdrop-blur-xs text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                {prop.category}
+                              </span>
+                            </div>
 
-                          {/* Data block on Right */}
-                          <div className="flex flex-col justify-between flex-grow min-w-0">
-                            <div>
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <span className="text-amber-600 font-extrabold text-[11px]">
-                                  {prop.transactionType} <strong className="text-slate-900 text-xs sm:text-sm font-black">{prop.priceText}</strong>
-                                </span>
-                                
-                                <div className="flex items-center gap-0.5">
-                                  {isAdminMode && (
+                            {/* Data block on Right */}
+                            <div className="flex flex-col justify-between flex-grow min-w-0">
+                              <div>
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <span className="text-amber-600 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-amber-100/85 text-amber-900 px-1.5 py-0.5 rounded text-[10px] font-black">{prop.transactionType}</span>
+                                    <strong className="text-slate-900 text-sm sm:text-base font-black tracking-tight">{prop.priceText}</strong>
+                                  </span>
+                                  
+                                  <div className="flex items-center gap-0.5">
+                                    {isAdminMode && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          handleDeleteProperty(prop.id, e);
+                                        }}
+                                        className="text-red-500 hover:bg-red-100/80 hover:text-red-700 p-1.5 rounded-full transition-all cursor-pointer relative z-20"
+                                        style={{ color: "#DC2626" }}
+                                        title="매물 즉시 삭제 (관리자)"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        e.preventDefault();
-                                        handleDeleteProperty(prop.id, e);
+                                        toggleFavorite(prop.id, e);
                                       }}
-                                      className="text-red-500 hover:bg-red-100/80 hover:text-red-700 p-1.5 rounded-full transition-all cursor-pointer relative z-20"
-                                      style={{ color: "#DC2626" }}
-                                      title="매물 즉시 삭제 (관리자)"
+                                      className="text-slate-400 hover:text-red-500 p-1 rounded-full transition-all"
                                     >
-                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
                                     </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFavorite(prop.id, e);
-                                    }}
-                                    className="text-slate-400 hover:text-red-500 p-1 rounded-full transition-all"
-                                  >
-                                    <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                                  </button>
+                                  </div>
                                 </div>
+                                
+                                <h4 className="text-xs sm:text-sm md:text-[14px] font-black text-slate-900 line-clamp-1 group-hover:text-amber-600 transition-colors mt-0.5">
+                                  {prop.name}
+                                </h4>
+                                
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-1 tracking-tight flex items-center gap-1">
+                                  <span className="bg-slate-100 px-1 py-0.2 rounded font-black text-slate-500">{prop.pyongValue}평</span>
+                                  <span>|</span>
+                                  <span>{prop.floorText.split('/')[0]}</span>
+                                  <span>|</span>
+                                  <span className="truncate max-w-[90px]">{prop.direction}</span>
+                                </p>
                               </div>
-                              
-                              <h4 className="text-[11px] sm:text-xs font-black text-slate-800 line-clamp-1 group-hover:text-amber-600 transition-colors">
-                                {prop.name}
-                              </h4>
-                              
-                              <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-1 tracking-tight flex items-center gap-1">
-                                <span className="bg-slate-100 px-1 py-0.2 rounded font-black text-slate-500">{prop.pyongValue}평</span>
-                                <span>|</span>
-                                <span>{prop.floorText.split('/')[0]}</span>
-                                <span>|</span>
-                                <span className="truncate max-w-[90px]">{prop.direction}</span>
-                              </p>
-                            </div>
 
-                            {/* CTAs */}
-                            <div className="flex items-center gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openDetailsAndSetInquiry(prop);
-                                }}
-                                className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] sm:text-[10px] font-black py-1 px-2.5 rounded-lg flex items-center gap-0.5 transition-colors cursor-pointer"
-                              >
-                                <span>상세상담</span>
-                                <ChevronRight className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSaveAsImage(prop.id);
-                                }}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] sm:text-[10px] font-bold py-1 px-2.5 rounded-lg transition-colors cursor-pointer"
-                              >
-                                이미지저장
-                              </button>
+                              {/* CTAs */}
+                              <div className="flex items-center gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDetailsAndSetInquiry(prop);
+                                  }}
+                                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] sm:text-[10px] font-black py-1 px-2.5 rounded-lg flex items-center gap-0.5 transition-colors cursor-pointer"
+                                >
+                                  <span>상세상담</span>
+                                  <ChevronRight className="w-2.5 h-2.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSaveAsImage(prop.id);
+                                  }}
+                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] sm:text-[10px] font-bold py-1 px-2.5 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  이미지저장
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                          </motion.div>
+                        );
+                      })}
                   </AnimatePresence>
                 </div>
 
@@ -3127,14 +3419,45 @@ export default function App() {
                       onZoomChanged={(map) => setMapLevel(map.getLevel())}
                     >
                       {/* Listings interactive pins */}
-                      {allMapProperties.map((prop) => {
+                      {clusteredProperties.map((cluster) => {
+                        if (cluster.isCluster) {
+                          return (
+                            <CustomOverlayMap
+                              key={cluster.id}
+                              position={{ lat: cluster.centerLat, lng: cluster.centerLng }}
+                              clickable={true}
+                            >
+                              <div 
+                                onClick={() => {
+                                  setMapCenter({ lat: cluster.centerLat, lng: cluster.centerLng });
+                                  setMapLevel(prev => Math.max(prev - 2, 2));
+                                }}
+                                className="flex items-center justify-center cursor-pointer select-none group"
+                                style={{ transform: 'translate(-50%, -50%)', pointerEvents: 'auto' }}
+                              >
+                                {/* Dynamic ambient glowing concentric pulse */}
+                                <div className="absolute w-[54px] h-[54px] bg-amber-500/20 rounded-full animate-ping pointer-events-none" />
+                                <div className="absolute w-[42px] h-[42px] bg-amber-500/15 rounded-full animate-pulse pointer-events-none" />
+                                
+                                {/* Core Real Estate Cluster Bubble Badge */}
+                                <div className="relative flex flex-col items-center justify-center w-12 h-12 bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black shadow-xl ring-4 ring-white border border-amber-600 rounded-full transition-transform duration-250 active:scale-95 group-hover:scale-110">
+                                  <span className="text-sm font-black tracking-tight leading-none text-slate-950">{cluster.count}</span>
+                                  <span className="text-[9px] font-extrabold text-slate-950/80 mt-0.5 leading-none">매물</span>
+                                </div>
+                              </div>
+                            </CustomOverlayMap>
+                          );
+                        }
+
+                        // Otherwise render standard single marker as before
+                        const prop = cluster.prop;
+                        if (!prop) return null;
+
                         const isHovered = hoveredPropertyId === prop.id;
                         const isActive = activeMarkerId === prop.id;
                         const isPreview = prop.id === 'new-prop-preview';
-                        let propLat = Number(prop.latitude !== undefined && prop.latitude !== null ? prop.latitude : prop.mapLat);
-                        let propLng = Number(prop.longitude !== undefined && prop.longitude !== null ? prop.longitude : prop.mapLng);
-                        if (isNaN(propLat) || propLat <= 0) propLat = 35.151261;
-                        if (isNaN(propLng) || propLng <= 0) propLng = 129.029706;
+                        let propLat = cluster.centerLat;
+                        let propLng = cluster.centerLng;
                         
                         const txColorClass = isPreview 
                           ? 'bg-rose-500 animate-pulse' 
@@ -3147,9 +3470,9 @@ export default function App() {
                         const activeRingClass = isPreview
                           ? 'ring-4 ring-rose-400/80 scale-105 border-rose-500 font-extrabold z-[1000] !bg-rose-50'
                           : isActive 
-                          ? 'ring-2 ring-indigo-500 scale-105 border-indigo-600 font-extrabold z-[999]' 
+                          ? 'border-[3px] border-amber-500 bg-amber-50 ring-4 ring-amber-400/40 scale-110 font-black z-[1002] shadow-lg shadow-amber-500/10' 
                           : isHovered 
-                          ? 'ring-1 ring-amber-400 border-amber-500 z-[998]' 
+                          ? 'border-2 border-amber-400 scale-105 z-[1001] shadow-md' 
                           : 'border-slate-300';
                         
                         return (
@@ -3198,25 +3521,24 @@ export default function App() {
                                     openDetailsAndSetInquiry(prop);
                                   }
                                 }}
-                                className={`relative flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded-lg border bg-white shadow-md text-slate-800 transition-all hover:scale-103 cursor-pointer ${activeRingClass}`}
+                                className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-black rounded-xl border bg-white shadow-md text-slate-800 transition-all hover:scale-105 cursor-pointer ${activeRingClass}`}
                                 style={{ 
                                   whiteSpace: 'nowrap', 
                                   transform: 'translate(-50%, -135%)',
                                   pointerEvents: 'auto'
                                 }}
                               >
-                                <span className={`px-1 py-0.2 text-[8px] font-black text-white rounded flex items-center justify-center shrink-0 ${txColorClass}`}>
+                                <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-black text-white rounded flex items-center justify-center shrink-0 ${txColorClass}`}>
                                   {isPreview ? '등록중' : prop.transactionType}
                                 </span>
-                                <span className="max-w-[70px] truncate font-black text-slate-900 mx-0.5 leading-tight">
+                                <span className="max-w-[110px] truncate font-black text-slate-900 mx-1 leading-tight text-xs sm:text-sm border-none">
                                   {prop.name.replace(' 아파트', '')}
                                 </span>
-                                <span className="text-amber-700 font-extrabold shrink-0">
+                                <span className="text-amber-600 font-extrabold shrink-0 text-xs sm:text-sm">
                                   {prop.priceText || (isPreview ? '위치확인' : '')}
                                 </span>
                                 
-                                {/* Center-pointing mini triangle indicator */}
-                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-t-[4px] border-t-white border-x-[4px] border-x-transparent drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]"></div>
+                                {/* Clean background container without center triangle to avoid placement confusion */}
                               </div>
                             </CustomOverlayMap>
                           </React.Fragment>
@@ -3780,83 +4102,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Consultation Form Sidebar (1/4 column) */}
-          {viewMode !== 'map' && (
-            <div className="lg:col-span-1" id="inquiry-section">
-              <div className="sticky top-24 bg-white/80 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-5">
-                
-                <div className="border-b border-amber-100 pb-3">
-                  <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base">
-                    <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
-                    <span>실시간 온라인 상담 신청</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
-                    남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
-                  </p>
-                </div>
-              
-                {/* Instant Status Counter */}
-                <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
-    
-    <input
-      type="text"
-      placeholder="성함"
-      value={consultName}
-      onChange={(e) => setConsultName(e.target.value)}
-      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-    />
-
-    <input
-      type="tel"
-      placeholder="연락처"
-      value={consultPhone}
-      onChange={(e) => setConsultPhone(e.target.value)}
-      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-    />
-
-    <select
-      value={consultType}
-      onChange={(e) => setConsultType(e.target.value)}
-      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-    >
-      <option value="매수문의">매수 문의</option>
-      <option value="매도문의">매도 문의</option>
-      <option value="매물접수">매물 접수</option>
-      <option value="상담문의">일반 상담</option>
-    </select>
-
-    <textarea
-      placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-      value={consultText}
-      onChange={(e) => setConsultText(e.target.value)}
-      rows={5}
-      className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-    />
-
-    <button
-      type="submit"
-      className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition-colors"
-    >
-      상담 신청 보내기
-    </button>
-
-  </form>
-                <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100 flex items-center justify-between text-center">
-                  <div className="flex-1">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-                    <div className="text-sm font-black text-slate-800">14건</div>
-                  </div>
-                  <div className="w-px h-8 bg-slate-200" />
-                  <div className="flex-1">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-                    <div className="text-sm font-black text-amber-600">30분 내</div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
-
         </div>
       </main>
 
@@ -3871,7 +4116,7 @@ export default function App() {
               찾아오시는 길
             </span>
             <h2 className="text-2xl sm:text-3.5xl font-black tracking-tight text-slate-900 mt-3 mb-2 leading-tight">
-              부강공인중개사사무소로 오시는 길
+              부강부동산으로 오시는 길
             </h2>
             <p className="text-slate-500 text-xs sm:text-sm font-bold leading-relaxed">
               롯데캐슬골드아너, 가야반도보라빌 인근 큰 대로변 1층에 자리하고 있어 쉽게 발견하실 수 있습니다.
@@ -3918,7 +4163,7 @@ export default function App() {
                       position={{ lat: 35.151261, lng: 129.029706 }}
                     >
                       <div className="p-2.5 text-xs font-black text-slate-900 bg-white border border-amber-400 rounded-lg shadow-md max-w-[190px] leading-snug">
-                        <div className="text-amber-655 font-black mb-0.5" style={{ color: "#EAB308" }}>🏢 부강공인중개사사무소</div>
+                        <div className="text-amber-655 font-black mb-0.5" style={{ color: "#EAB308" }}>🏢 부강부동산</div>
                         <div className="text-[10px] text-slate-500 font-extrabold">부산 냉정로 273 (큰 대로변 1층)</div>
                       </div>
                     </MapMarker>
@@ -4219,12 +4464,12 @@ export default function App() {
                 부강
               </div>
               <span className="text-base sm:text-lg font-black text-white tracking-wider">
-                부강공인중개사사무소
+                부강부동산
               </span>
             </div>
             
             <p className="text-[11px] leading-relaxed text-slate-450 max-w-sm">
-              부산광역시 부산진구 냉정로 일대 전문 중개업으로 등록 인가받은 부강공인중개사사무소입니다. 허위매물 무조건 0% 사명감 실매물 제도의 철두철미한 투명 중개를 맹세합니다.
+              부산광역시 부산진구 냉정로 일대 전문 중개업으로 등록 인가받은 부강부동산입니다. 허위매물 무조건 0% 사명감 실매물 제도의 철두철미한 투명 중개를 맹세합니다.
             </p>
 
             <div className="text-[10px] text-slate-550 font-semibold uppercase tracking-widest mt-2">
@@ -4255,7 +4500,7 @@ export default function App() {
             </div>
 
             <div className="border-t border-slate-800 pt-3 text-[10px] text-slate-550 font-bold">
-              Copyright © {new Date().getFullYear()} 부강공인중개사사무소. All Rights Reserved.
+              Copyright © {new Date().getFullYear()} 부강부동산. All Rights Reserved.
             </div>
           </div>
 
