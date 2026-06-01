@@ -2114,380 +2114,353 @@ export default function App() {
       {/* ==========================================
           HERO SECTION: GOLDEN SUNSHINE
           ========================================== */}
-      <section className="relative bg-gradient-to-b from-amber-100/40 via-amber-200/10 to-transparent border-b border-amber-100 py-12 md:py-16">
+      <section className="relative bg-gradient-to-b from-amber-100/35 via-amber-200/10 to-transparent border-b border-amber-100 py-6 md:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {/* Top content layout: Titles & Filter Station on Left, Consultation on Right */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-10">
-            <div className="lg:col-span-7 xl:col-span-8 text-left flex flex-col justify-end gap-5">
-              <div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-6">
+            <div className="lg:col-span-7 xl:col-span-8 text-left relative overflow-hidden bg-white/90 border border-amber-200/60 p-6 sm:p-8 md:p-10 rounded-3xl shadow-xl flex flex-col justify-between gap-6 min-h-[420px]">
+              
+              {/* Background Map Image behind the text with soft white fade */}
+              <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl">
+                <img 
+                  src="/src/assets/images/busan_region_map_1780279187834.png" 
+                  alt="부산 지역 지도 배경" 
+                  className="absolute right-0 top-1/2 -translate-y-1/2 w-full sm:w-[65%] md:w-[50%] lg:w-[65%] xl:w-[60%] h-full object-cover opacity-35 filter contrast-[1.05] brightness-[1.02]"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/10" />
+              </div>
+
+              {/* Text content layout inside hero */}
+              <div className="relative z-10 space-y-5">
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100/60 text-amber-800 border border-amber-200/50 text-xs font-extrabold mb-4"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-200/70 text-amber-950 border border-amber-300 text-xs font-black"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>부산진구 전문 공인중개사사무소</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+                  <span>🏆 부산 No.1 전문 공인중개사사무소 ・ 부강부동산</span>
                 </motion.div>
 
-                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 leading-tight mb-4 animate-fade-in">
-                  부산진구 매물, <span className="text-amber-600 underline decoration-amber-300">한눈에 찾기</span>
+                <h1 className="text-4xl sm:text-5xl md:text-5xl xl:text-6xl font-black tracking-tight text-slate-900 leading-[1.12] mb-3">
+                  부산 No.1 부동산<br />
+                  <span className="text-amber-600 underline decoration-amber-400 decoration-3 underline-offset-4">부강부동산</span>
                 </h1>
                 
-                <p className="text-xs sm:text-sm md:text-base font-bold leading-relaxed text-slate-500">
-                  양정, 개금, 서면, 범천동 아파트부터 분양권, 공장/토지 매물까지!<br />
-                  실제 매매 시세에 기반한 완벽한 허위매물 제로 100% 실매물로 매칭합니다.
+                <p className="text-sm sm:text-base md:text-lg font-black leading-relaxed text-slate-600 max-w-2xl">
+                  아파트, 분양권, 오피스텔, 원·투룸, 빌라/주택, 상가, 공장, 토지 매칭까지!<br />
+                  고객님이 원하시는 매물을 끝까지 찾아드립니다.
                 </p>
               </div>
 
-          {/* ==========================================
-              KOREAN REAL ESTATE CATEGORY CARDS (Grid layout matching user requested categories styled with premium brand amber theme)
-              ========================================== */}
-          <div className="w-full py-2.5" id="korean-category-cards-station">
-            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2.5 md:gap-3">
-              
-              {/* Card 1: 아파트 */}
-              <div 
-                onClick={() => handleCategoryCardClick('아파트')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="14" y="4" width="20" height="38" rx="2" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M6 42V16H14" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M34 20H42V42" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M2 42H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <line x1="18" y1="10" x2="22" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="26" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="18" y1="18" x2="22" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="26" y1="18" x2="30" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="18" y1="26" x2="22" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="26" y1="26" x2="30" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="18" y1="34" x2="22" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="26" y1="34" x2="30" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">아파트</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 2: 오피스텔 */}
-              <div 
-                onClick={() => handleCategoryCardClick('오피스텔')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 44V4L32 8V44" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
-                    <path d="M6 44H42" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M21 12H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M21 20H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M21 28H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M21 36H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">오피스텔</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 3: 분양권 */}
-              <div 
-                onClick={() => handleCategoryCardClick('분양권')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="8" y="4" width="32" height="40" rx="3" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M14 12H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M14 20H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M14 28H26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <circle cx="32" cy="28" r="3" fill="currentColor" />
-                    <path d="M12 36H36" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">분양권</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: 원룸·투룸 */}
-              <div 
-                onClick={() => handleCategoryCardClick('원룸·투룸')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M24 6V42" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
-                    <circle cx="15" cy="15" r="2.5" fill="currentColor" />
-                    <circle cx="33" cy="15" r="2.5" fill="currentColor" />
-                    <path d="M11 28H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M29 28H37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M11 34H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M29 34H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">원룸·투룸</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 5: 빌라 */}
-              <div 
-                onClick={() => handleCategoryCardClick('빌라')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="8" y="14" width="32" height="28" rx="2" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M4 14L24 4L44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <rect x="14" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <rect x="28" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <rect x="14" y="32" width="6" height="10" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <rect x="28" y="32" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">빌라</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 6: 주택 */}
-              <div 
-                onClick={() => handleCategoryCardClick('주택')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 20V42H42V20" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
-                    <path d="M3 22L24 6L45 22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M1 42H47" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <rect x="15" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <rect x="27" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <path d="M21 34H27V42H21V34Z" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">주택</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 7: 상가 */}
-              <div 
-                onClick={() => handleCategoryCardClick('상가')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 40V14H42V40" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M4 14C4 10 12 10 12 14C12 10 20 10 20 14C20 10 28 10 28 14C28 10 36 10 36 14C36 10 44 10 44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
-                    <rect x="12" y="24" width="8" height="10" rx="1" stroke="currentColor" strokeWidth="2" />
-                    <rect x="28" y="24" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
-                    <path d="M2 40H46" stroke="currentColor" strokeWidth="2.5" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">상가</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 8: 공장 */}
-              <div 
-                onClick={() => handleCategoryCardClick('공장')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 14V40H44V26L32 14L20 26L4 14Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
-                    <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <rect x="10" y="24" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
-                    <rect x="22" y="28" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
-                    <path d="M34 18H38" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">공장</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 9: 토지 */}
-              <div 
-                onClick={() => handleCategoryCardClick('토지')}
-                className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
-              >
-                <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
-                  <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 38C14 30 34 30 42 38" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
-                    <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <line x1="38" y1="10" x2="26" y2="24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M35 7L41 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M28 22L20 28L18 34L26 31L30 24Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
-                  </svg>
-                </div>
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">토지</span>
-                  <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
-                    <span>클릭</span>
-                    <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
-                  </span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-          {/* Close Left Box Column */}
-          </div>
-
-          {/* Right Box: Online Consultation Form (Aligns perfectly at the bottom with Left Columns filters) */}
-          <div className="lg:col-span-5 xl:col-span-4 w-full flex flex-col justify-end text-left" id="inquiry-section">
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-4 text-left h-full justify-between">
-              <div>
-                <div className="border-b border-amber-100 pb-3 mb-4">
-                  <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base shadow-xs">
-                    <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
-                    <span>실시간 온라인 상담 신청</span>
+              {/* Category Quick Click Buttons with Icons inside the Hero Box */}
+              <div className="relative z-10 w-full pt-2">
+                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2.5 md:gap-3">
+                  
+                  {/* Card 1: 아파트 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('아파트')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="14" y="4" width="20" height="38" rx="2" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M6 42V16H14" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M34 20H42V42" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M2 42H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <line x1="18" y1="10" x2="22" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="26" y1="10" x2="30" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="18" y1="18" x2="22" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="26" y1="18" x2="30" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="18" y1="26" x2="22" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="26" y1="26" x2="30" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="18" y1="34" x2="22" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="26" y1="34" x2="30" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">아파트</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
-                    남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
-                  </p>
+
+                  {/* Card 2: 오피스텔 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('오피스텔')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 44V4L32 8V44" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                        <path d="M6 44H42" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M21 12H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M21 20H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M21 28H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M21 36H27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">오피스텔</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: 분양권 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('분양권')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="8" y="4" width="32" height="40" rx="3" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M14 12H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M14 20H34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M14 28H26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <circle cx="32" cy="28" r="3" fill="currentColor" />
+                        <path d="M12 36H36" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">분양권</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 4: 원룸·투룸 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('원룸·투룸')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M24 6V42" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
+                        <circle cx="15" cy="15" r="2.5" fill="currentColor" />
+                        <circle cx="33" cy="15" r="2.5" fill="currentColor" />
+                        <path d="M11 28H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M29 28H37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M11 34H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M29 34H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">원룸·투룸</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 5: 빌라 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('빌라')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="8" y="14" width="32" height="28" rx="2" stroke="currentColor" strokeWidth="2.5" />
+                        <path d="M4 14L24 4L44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <rect x="14" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <rect x="28" y="20" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <rect x="14" y="32" width="6" height="10" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <rect x="28" y="32" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">빌라</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 6: 주택 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('주택')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 20V42H42V20" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                        <path d="M3 22L24 6L45 22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M1 42H47" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <rect x="15" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <rect x="27" y="26" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <path d="M21 34H27V42H21V34Z" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">주택</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 7: 상가 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('상가')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 40V14H42V40" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M4 14C4 10 12 10 12 14C12 10 20 10 20 14C20 10 28 10 28 14C28 10 36 10 36 14C36 10 44 10 44 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
+                        <rect x="12" y="24" width="8" height="10" rx="1" stroke="currentColor" strokeWidth="2" />
+                        <rect x="28" y="24" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.1" />
+                        <path d="M2 40H46" stroke="currentColor" strokeWidth="2.5" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">상가</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 8: 공장 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('공장')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 14V40H44V26L32 14L20 26L4 14Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
+                        <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <rect x="10" y="24" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
+                        <rect x="22" y="28" width="6" height="8" rx="0.5" stroke="currentColor" strokeWidth="2" />
+                        <path d="M34 18H38" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">공장</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 9: 토지 */}
+                  <div 
+                    onClick={() => handleCategoryCardClick('토지')}
+                    className="bg-white border-2 border-amber-500/20 hover:border-amber-500 rounded-xl py-3 px-1 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-[1.03] hover:shadow-md active:scale-95 group shadow-xs min-h-[115px] md:min-h-[130px] gap-1.5"
+                  >
+                    <div className="transition-transform group-hover:scale-105 duration-300 text-amber-500 shrink-0">
+                      <svg className="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 38C14 30 34 30 42 38" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="currentColor" fillOpacity="0.1" />
+                        <path d="M2 38H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <line x1="38" y1="10" x2="26" y2="24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M35 7L41 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M28 22L20 28L18 34L26 31L30 24Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-xs md:text-[13px] font-black text-slate-800 tracking-tight">토지</span>
+                      <span className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center justify-center gap-0.5 shadow-2xs transition-colors">
+                        <span>클릭</span>
+                        <ChevronRight className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  </div>
+
                 </div>
-
-                <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
-                  <input
-                    type="text"
-                    placeholder="성함"
-                    value={consultName}
-                    onChange={(e) => setConsultName(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-
-                  <input
-                    type="tel"
-                    placeholder="연락처"
-                    value={consultPhone}
-                    onChange={(e) => setConsultPhone(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-
-                  <select
-                    value={consultType}
-                    onChange={(e) => setConsultType(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  >
-                    <option value="매수문의">매수 문의</option>
-                    <option value="매도문의">매도 문의</option>
-                    <option value="매물접수">매물 접수</option>
-                    <option value="상담문의">일반 상담</option>
-                  </select>
-
-                  <textarea
-                    placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-                    value={consultText}
-                    onChange={(e) => setConsultText(e.target.value)}
-                    rows={3}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-
-                  <button
-                    type="submit"
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-xl transition-colors cursor-pointer text-xs"
-                  >
-                    상담 신청 보내기
-                  </button>
-                </form>
               </div>
 
-              <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-center mt-3">
-                <div className="flex-1">
-                  <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-                  <div className="text-xs font-black text-slate-800">14건</div>
+            </div> {/* Close Left Box Column */}
+
+            {/* Right Box: Online Consultation Form (Aligns perfectly at the bottom with Left Columns filters) */}
+            <div className="lg:col-span-5 xl:col-span-4 w-full flex flex-col justify-end text-left" id="inquiry-section">
+              <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-4 text-left h-full justify-between">
+                <div>
+                  <div className="border-b border-amber-100 pb-3 mb-4">
+                    <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base shadow-xs">
+                      <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
+                      <span>실시간 온라인 상담 신청</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
+                      남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+                    <input
+                      type="text"
+                      placeholder="성함"
+                      value={consultName}
+                      onChange={(e) => setConsultName(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+
+                    <input
+                      type="tel"
+                      placeholder="연락처"
+                      value={consultPhone}
+                      onChange={(e) => setConsultPhone(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+
+                    <select
+                      value={consultType}
+                      onChange={(e) => setConsultType(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    >
+                      <option value="매수문의">매수 문의</option>
+                      <option value="매도문의">매도 문의</option>
+                      <option value="매물접수">매물 접수</option>
+                      <option value="상담문의">일반 상담</option>
+                    </select>
+
+                    <textarea
+                      placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+                      value={consultText}
+                      onChange={(e) => setConsultText(e.target.value)}
+                      rows={3}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+
+                    <button
+                      type="submit"
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-xl transition-colors cursor-pointer text-xs"
+                    >
+                      상담 신청 보내기
+                    </button>
+                  </form>
                 </div>
-                <div className="w-px h-6 bg-slate-200" />
-                <div className="flex-1">
-                  <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-                  <div className="text-xs font-black text-amber-600">30분 내</div>
+
+                <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-center mt-3">
+                  <div className="flex-1">
+                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+                    <div className="text-xs font-black text-slate-800">14건</div>
+                  </div>
+                  <div className="w-px h-6 bg-slate-200" />
+                  <div className="flex-1">
+                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+                    <div className="text-xs font-black text-amber-600">30분 내</div>
+                  </div>
                 </div>
               </div>
             </div>
+
           </div>
 
-        </div>
-      </div>
-    </section>
 
-      {/* ==========================================
-          QUICK ACCORD PRESETS (Bento Bar Style)
-          ========================================== */}
-      <section className="bg-amber-100/10 py-5 border-b border-amber-200/30">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs">
-          <span className="font-extrabold text-slate-400 flex items-center gap-1 mr-1">
-            <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
-            빠른 탐색:
-          </span>
-          <button 
-            onClick={() => applyPresetFilter('아파트', '매매')}
-            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
-          >
-            아파트 매매
-          </button>
-          <button 
-            onClick={() => applyPresetFilter('오피스텔', '전세')}
-            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
-          >
-            오피스텔 전세
-          </button>
-          <button 
-            onClick={() => applyPresetFilter('원룸', '월세')}
-            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
-          >
-            역세권 원룸 월세
-          </button>
-          <button 
-            onClick={() => applyPresetFilter('분양권', '전체')}
-            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
-          >
-            양정 신축 분양권
-          </button>
-          <button 
-            onClick={() => applyPresetFilter('공장', '전체')}
-            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-amber-50 hover:text-amber-800 font-black tracking-tight transition-all cursor-pointer shadow-xs border border-amber-200/60"
-          >
-            개발 공장 매매
-          </button>
+
         </div>
       </section>
 
