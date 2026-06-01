@@ -475,6 +475,10 @@ export default function App() {
   const [copied, setCopied] = useState<boolean>(false);
   const [forceShowMap, setForceShowMap] = useState<boolean>(false);
   
+  // Side drawer tabs for left-wing widget on standard screen/zoom overlapping scenarios
+  const [isSideCategoryOpen, setIsSideCategoryOpen] = useState<boolean>(false);
+  const [isSideConsultOpen, setIsSideConsultOpen] = useState<boolean>(false);
+
   // Interactive Dropdowns Controls
   const [activeDropdown, setActiveDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
   const [activeStickyDropdown, setActiveStickyDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
@@ -2469,10 +2473,382 @@ export default function App() {
       </section>
 
       {/* ==========================================
+          DYNAMIC FLOATING LEFT WING STATION (STAYS IN THE LEFT EMPTY MARGIN OF ULTRA-WIDE MONITORS)
+          ========================================== */}
+      <div 
+        className="hidden min-[1685px]:flex flex-col gap-5 fixed top-[180px] left-3 min-[1685px]:left-[calc(50%-835px)] z-40 w-[170px]" 
+        id="floating-wing-banner"
+      >
+        {/* 1. 카테고리 검색 Widget (Premium Style Accordion Menu UI matching landing page brand colors) */}
+        <div className="bg-white border-2 border-amber-500/15 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-shadow">
+          <div className="bg-slate-900 border-b border-amber-500/20 px-3 py-3 flex items-center gap-2">
+            <div className="bg-amber-500 text-slate-950 p-1 rounded-lg shrink-0">
+              <svg className="w-4 h-4 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <h3 className="text-white text-[12.5px] font-black tracking-tight leading-none uppercase select-none">카테고리 검색</h3>
+          </div>
+          
+          {/* Category buttons list with arrow indicators matching landing page image */}
+          <div className="divide-y divide-slate-100/80 flex flex-col">
+            {[
+              { name: '아파트', label: '아파트' },
+              { name: '오피스텔', label: '오피스텔' },
+              { name: '분양권', label: '분양권' },
+              { name: '원룸·투룸', label: '원룸·투룸' },
+              { name: '빌라', label: '빌라' },
+              { name: '주택', label: '주택' },
+              { name: '상가', label: '상가' },
+              { name: '공장', label: '공장' },
+              { name: '토지', label: '토지' }
+            ].map((item) => {
+              let isActive = false;
+              if (item.name === '원룸·투룸') {
+                isActive = activeSubPills.includes('원룸') || activeSubPills.includes('투룸');
+              } else {
+                isActive = activeSubPills.includes(item.name) && activeSubPills.length === 1;
+              }
+
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => handleCategoryCardClick(item.name)}
+                  className={`w-full py-2.5 px-3 flex items-center justify-between text-left cursor-pointer transition-all duration-150 ${
+                    isActive
+                      ? 'bg-amber-50/75 border-l-4 border-amber-500 font-extrabold text-amber-900 shadow-2xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 font-bold hover:text-slate-950'
+                  }`}
+                >
+                  <span className="text-[11px] tracking-tight">{item.label}</span>
+                  <span className={`text-[9px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-300'} transition-transform duration-200`}>▼</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. Portal Search Banner (Green & multicolors custom widget) */}
+        <div className="bg-white border-2 border-slate-150 rounded-2xl p-3 shadow-xs hover:shadow-md transition-shadow flex flex-col items-center justify-center text-center gap-2.5">
+          <div className="flex items-center gap-1.5 justify-center">
+            <span className="text-[#03C75A] font-extrabold text-[12px] tracking-tight hover:underline cursor-pointer">NAVER</span>
+            <span className="text-slate-300 font-normal">|</span>
+            <span className="font-extrabold text-[12px] tracking-tight flex items-center">
+              <span className="text-[#1e90ff]">D</span>
+              <span className="text-[#ff4500]">a</span>
+              <span className="text-[#ffd700]">u</span>
+              <span className="text-[#ff0000]">m</span>
+            </span>
+          </div>
+          
+          {/* portal search bar graphic emulation */}
+          <div className="w-full h-7 flex items-center justify-between px-2 rounded-sm border-2 border-[#03C75A] bg-white shadow-3xs cursor-pointer hover:bg-slate-50/50">
+            <span className="text-[10px] font-black text-slate-900">부강부동산</span>
+            <span className="text-[#03C75A] text-[8px] font-black">▼</span>
+          </div>
+
+          <div className="flex flex-col gap-1 leading-tight text-center">
+            <p className="text-[10px] font-black text-slate-800 tracking-tight">
+              포털 검색창에 <span className="text-amber-600 block font-black underline decoration-wavy decoration-amber-500/50">&ldquo;부강공인중개사&rdquo;</span>를 검색하세요!
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          DYNAMIC FLOATING RIGHT WING STATION (STAYS IN THE RIGHT EMPTY MARGIN OF ULTRA-WIDE MONITORS)
+          ========================================== */}
+      <div 
+        className="hidden min-[1685px]:flex flex-col gap-5 fixed top-[180px] right-3 min-[1685px]:right-[calc(50%-835px)] z-40 w-[240px]" 
+        id="floating-right-wing-banner"
+      >
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl border-2 border-amber-500/15 p-4 shadow-lg flex flex-col gap-3.5 text-left">
+          <div className="border-b border-amber-100 pb-2">
+            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-[12.5px] shadow-xs">
+              <Mail className="w-4 h-4 text-amber-500 animate-pulse" />
+              <span>실시간 온라인 상담 신청</span>
+            </div>
+            <p className="text-[9.5px] text-slate-400 font-bold leading-normal mt-1">
+              부강 대표 고민주 소장이 접수 즉시 신속히 대조 연락 드립니다.
+            </p>
+          </div>
+
+          <form onSubmit={handleInquirySubmit} className="flex flex-col gap-2.5">
+            <input
+              type="text"
+              placeholder="성함"
+              value={consultName}
+              onChange={(e) => setConsultName(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+
+            <input
+              type="tel"
+              placeholder="연락처"
+              value={consultPhone}
+              onChange={(e) => setConsultPhone(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+
+            <select
+              value={consultType}
+              onChange={(e) => setConsultType(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+            >
+              <option value="매수문의">매수 문의</option>
+              <option value="매도문의">매도 문의</option>
+              <option value="매물접수">매물 접수</option>
+              <option value="상담문의">일반 상담</option>
+            </select>
+
+            <textarea
+              placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+              value={consultText}
+              onChange={(e) => setConsultText(e.target.value)}
+              rows={3}
+              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+
+            <button
+              type="submit"
+              className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 rounded-lg transition-colors cursor-pointer text-xs"
+            >
+              상담 신청 보내기
+            </button>
+          </form>
+
+          <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100 flex items-center justify-between text-center mt-1">
+            <div className="flex-1">
+              <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+              <div className="text-[11px] font-black text-slate-800">14건</div>
+            </div>
+            <div className="w-px h-5 bg-slate-200" />
+            <div className="flex-1">
+              <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+              <div className="text-[11px] font-black text-amber-600">30분 내</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          RESPONSIVE COLLAPSIBLE LEFT & RIGHT EDGE TABS & DRAWERS (FOR NARROW/ZOOMED SCREEN OVERLAP SOLUTIONS)
+          ========================================== */}
+      <div className="flex min-[1685px]:hidden">
+        {/* Left-edge projecting tabs */}
+        <div className="fixed left-0 top-[230px] z-45 flex flex-col gap-2.5">
+          {/* TAB: 카테고리별 */}
+          <button
+            onClick={() => {
+              setIsSideCategoryOpen(!isSideCategoryOpen);
+              setIsSideConsultOpen(false);
+            }}
+            id="tab-category-trigger"
+            className="group flex items-center gap-1.5 pl-3.5 pr-4 py-2.5 rounded-r-2xl bg-amber-500 text-slate-950 font-black text-[12px] shadow-[2px_4px_12px_rgba(245,158,11,0.3)] border-r border-y border-amber-400 hover:bg-amber-600 hover:pl-5 transition-all duration-200 cursor-pointer select-none"
+          >
+            <ChevronLeft className={`w-3.5 h-3.5 transform transition-transform duration-200 ${isSideCategoryOpen ? 'rotate-180 text-slate-950' : 'text-slate-950/70'}`} />
+            <span>카테고리별</span>
+          </button>
+        </div>
+
+        {/* Right-edge projecting tabs */}
+        <div className="fixed right-0 top-[230px] z-45 flex flex-col gap-2.5">
+          {/* TAB: 실시간 상담신청 */}
+          <button
+            onClick={() => {
+              setIsSideConsultOpen(!isSideConsultOpen);
+              setIsSideCategoryOpen(false);
+            }}
+            id="tab-consult-trigger"
+            className="group flex items-center gap-1.5 pr-3.5 pl-4 py-2.5 rounded-l-2xl bg-[#0ea5e9] text-white font-black text-[12px] shadow-[-2px_4px_12px_rgba(14,165,233,0.3)] border-l border-y border-sky-400 hover:bg-[#0284c7] hover:pr-5 transition-all duration-200 cursor-pointer select-none"
+          >
+            <ChevronRight className={`w-3.5 h-3.5 transform transition-transform duration-200 ${isSideConsultOpen ? 'rotate-180 text-white' : 'text-white/70'}`} />
+            <span>상담신청</span>
+          </button>
+        </div>
+
+        {/* Floating backdrop click-outside overlays */}
+        <AnimatePresence>
+          {(isSideCategoryOpen || isSideConsultOpen) && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.35 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsSideCategoryOpen(false);
+                setIsSideConsultOpen(false);
+              }}
+              className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-40"
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Sliding Drawers */}
+        <AnimatePresence>
+          {/* Category Sliding Drawer */}
+          {isSideCategoryOpen && (
+            <motion.div
+              initial={{ x: '-100%', opacity: 0.8 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '-100%', opacity: 0.8 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed left-0 top-[180px] z-45 w-[210px] bg-white border-y-2 border-r-2 border-amber-500/20 rounded-r-2xl shadow-2xl p-3.5 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
+            >
+              <div className="flex items-center justify-between border-b border-amber-100 pb-2 flex-shrink-0">
+                <span className="text-[12.5px] font-black text-slate-950 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                  카테고리 검색
+                </span>
+                <button
+                  onClick={() => setIsSideCategoryOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Category Search Content with complete list */}
+              <div className="divide-y divide-slate-100/85 flex flex-col rounded-xl overflow-hidden border border-slate-100">
+                {[
+                  { name: '아파트', label: '아파트' },
+                  { name: '오피스텔', label: '오피스텔' },
+                  { name: '분양권', label: '분양권' },
+                  { name: '원룸·투룸', label: '원룸·투룸' },
+                  { name: '빌라', label: '빌라' },
+                  { name: '주택', label: '주택' },
+                  { name: '상가', label: '상가' },
+                  { name: '공장', label: '공장' },
+                  { name: '토지', label: '토지' }
+                ].map((item) => {
+                  let isActive = false;
+                  if (item.name === '원룸·투룸') {
+                    isActive = activeSubPills.includes('원룸') || activeSubPills.includes('투룸');
+                  } else {
+                    isActive = activeSubPills.includes(item.name) && activeSubPills.length === 1;
+                  }
+
+                  return (
+                    <button
+                      key={item.name}
+                      onClick={() => {
+                        handleCategoryCardClick(item.name);
+                        setIsSideCategoryOpen(false); // Close drawer on selection for elegant user flow
+                      }}
+                      className={`w-full py-2.5 px-3 flex items-center justify-between text-left cursor-pointer transition-all duration-155 text-[11px] ${
+                        isActive
+                          ? 'bg-amber-50/75 border-l-4 border-amber-500 font-extrabold text-amber-900 shadow-2xs'
+                          : 'bg-white hover:bg-slate-50 text-slate-700 font-bold hover:text-slate-950'
+                      }`}
+                    >
+                      <span className="truncate">{item.label}</span>
+                      <span className={`text-[8px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-350'} transition-transform duration-200`}>▼</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Mini Portal Promotion */}
+              <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center flex flex-col gap-1.5 mt-auto">
+                <span className="text-[#03C75A] font-extrabold text-[11px]">NAVER</span>
+                <span className="text-[10px] text-slate-700 font-black">“부강공인중개사”</span>
+                <span className="text-[8.5px] text-slate-400 font-bold">인터넷 실시간 공식 매물</span>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Consultation Sliding Drawer */}
+          {isSideConsultOpen && (
+            <motion.div
+              initial={{ x: '100%', opacity: 0.8 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0.8 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed right-0 top-[180px] z-45 w-[250px] bg-white border-y-2 border-l-2 border-amber-500/20 rounded-l-2xl shadow-2xl p-4 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
+            >
+              <div className="flex items-center justify-between border-b border-amber-100 pb-2 flex-shrink-0">
+                <span className="text-[12px] font-black text-slate-950 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                  실시간 온라인 상담 신청
+                </span>
+                <button
+                  onClick={() => setIsSideConsultOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <form onSubmit={(e) => {
+                handleInquirySubmit(e);
+                setIsSideConsultOpen(false);
+              }} className="flex flex-col gap-2.5">
+                <input
+                  type="text"
+                  placeholder="성함"
+                  value={consultName}
+                  onChange={(e) => setConsultName(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+
+                <input
+                  type="tel"
+                  placeholder="연락처"
+                  value={consultPhone}
+                  onChange={(e) => setConsultPhone(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+
+                <select
+                  value={consultType}
+                  onChange={(e) => setConsultType(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                >
+                  <option value="매수문의">매수 문의</option>
+                  <option value="매도문의">매도 문의</option>
+                  <option value="매물접수">매물 접수</option>
+                  <option value="상담문의">일반 상담</option>
+                </select>
+
+                <textarea
+                  placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+                  value={consultText}
+                  onChange={(e) => setConsultText(e.target.value)}
+                  rows={4}
+                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+
+                <button
+                  type="submit"
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 rounded-lg transition-colors cursor-pointer text-xs"
+                >
+                  상담 신청 보내기
+                </button>
+              </form>
+
+              <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100 flex items-center justify-between text-center mt-auto">
+                <div className="flex-1">
+                  <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+                  <div className="text-[11px] font-black text-slate-800">14건</div>
+                </div>
+                <div className="w-px h-5 bg-slate-200" />
+                <div className="flex-1">
+                  <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+                  <div className="text-[11px] font-black text-amber-600">30분 내</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ==========================================
           MAIN AREA: GRID LISTINGS & CONSULT SIDEBAR
           ========================================== */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow border-t border-amber-100/40" id="listings-section">
-        <div className="flex flex-col gap-6">
+        
+        {/* Real Estate Responsive Main Shell Container - Styled as a spacious full-width container */}
+        <div className="w-full flex flex-col gap-6">
 
           {/* ==========================================
               STICKY FILTER COMPONENT (Pins right under header on scroll)
@@ -4385,8 +4761,8 @@ export default function App() {
             )}
           </div>
 
-        </div>
-      </main>
+        </div> {/* Close w-full flex flex-col gap-6 Wrapper */}
+    </main>
 
       {/* ==========================================
           OFFLINE DIRECTIONS & MAP PLOT SECTION
