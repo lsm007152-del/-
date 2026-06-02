@@ -438,9 +438,25 @@ export default function App() {
   const [useYear, setUseYear] = useState<string>('전체');
   const [householdCount, setHouseholdCount] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Naver Real Estate style filter states
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>(['전체']);
+  const [priceCriterion, setPriceCriterion] = useState<'property' | 'actual'>('property');
+  const [priceMin, setPriceMin] = useState<number>(0); // in ten-thousand won (0 = 최소)
+  const [priceMax, setPriceMax] = useState<number>(999999); // 999999 = 최대
+  const [rentMin, setRentMin] = useState<number>(0);
+  const [rentMax, setRentMax] = useState<number>(999999);
+  const [areaUnit, setAreaUnit] = useState<'m2' | 'pyong'>('pyong');
+  const [areaMin, setAreaMin] = useState<number>(0); // (0 = 최소)
+  const [areaMax, setAreaMax] = useState<number>(999999); // 999999 = 최대
+  const [filterRooms, setFilterRooms] = useState<string>('전체'); // '전체' | '1' | '2' | '3' | '4 이상'
+  const [filterBathrooms, setFilterBathrooms] = useState<string>('전체'); // '전체' | '1' | '2' | '3' | '4 이상'
+  const [filterFloor, setFilterFloor] = useState<string>('전체'); // '전체' | '1층' | '지하층' | '지상층'
+  const [filterUseYear, setFilterUseYear] = useState<string>('전체'); // '전체' | '99'...
+  const [filterDirections, setFilterDirections] = useState<string[]>(['전체']); // ['전체']
   
   // Naver Real Estate style Map Split View Mode States
-  const [viewMode, setViewMode] = useState<'grid' | 'map' | 'openlist'>('map');
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('map');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hoveredPropertyId, setHoveredPropertyId] = useState<string | null>(null);
@@ -481,7 +497,7 @@ export default function App() {
 
   // Interactive Dropdowns Controls
   const [activeDropdown, setActiveDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
-  const [activeStickyDropdown, setActiveStickyDropdown] = useState<'price' | 'size' | 'year' | 'households' | null>(null);
+  const [activeStickyDropdown, setActiveStickyDropdown] = useState<'deal' | 'price' | 'size' | 'rooms' | 'floor' | 'year' | 'direction' | null>(null);
   const [advancedSearch, setAdvancedSearch] = useState<boolean>(false);
   
   // Detail Modal Controls
@@ -522,6 +538,32 @@ export default function App() {
 
   // --- Admin and manual property persistence ---
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [loginId, setLoginId] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
+
+  const handleAdminToggleClick = () => {
+    if (isAdminMode) {
+      setIsAdminMode(false);
+      triggerNotification('🔒 로그아웃 되었습니다. 관리자 모드가 비활성화되었습니다.');
+    } else {
+      setLoginId('');
+      setLoginPassword('');
+      setShowLoginModal(true);
+    }
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginId.trim() === 'bk3346' && loginPassword === 'bk33469952') {
+      setIsAdminMode(true);
+      setShowLoginModal(false);
+      triggerNotification('🔑 로그인에 성공하였습니다. 관리자 모드가 활성화되었습니다.');
+    } else {
+      triggerNotification('❌ 아이디 또는 비밀번호가 올바르지 않습니다.');
+    }
+  };
+
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   
   const [newProp, setNewProp] = useState({
@@ -861,7 +903,7 @@ export default function App() {
 
     // 2. Custom administrative safety confirmation gate
     if (!isAdminMode) {
-      triggerNotification('🔑 중개사 관리자 모드가 활성화되어 있지 않습니다. 우측 상단의 관리자 모드를 활성화한 후 다시 시도해주세요.');
+      triggerNotification('🔑 관리자 권한이 필요합니다. 우측 상단의 로그인 버튼을 통해 로그인한 후 다시 시도해주시기 바랍니다.');
       return;
     }
 
@@ -1274,9 +1316,15 @@ export default function App() {
       setActiveSubPills(['전체']);
     }
 
-    if (sectionId) {
+    if (tabName === '매물접수') {
+      setIsSideConsultOpen(true);
+      setConsultType('매물접수');
+    }
+
+    if (sectionId && tabName !== '매물접수') {
       setTimeout(() => {
-        const el = document.getElementById(sectionId);
+        const targetId = (sectionId === 'listings-section' || sectionId === 'listings-container') ? 'filter-station' : sectionId;
+        const el = document.getElementById(targetId);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
@@ -1310,9 +1358,9 @@ export default function App() {
     setActiveTab(category);
 
     setTimeout(() => {
-      const el = document.getElementById('listings-container');
+      const el = document.getElementById('filter-station');
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 150);
   };
@@ -1369,7 +1417,7 @@ export default function App() {
 
     // Scroll smoothly to listings section so user sees the active results map immediately
     setTimeout(() => {
-      const el = document.getElementById('listings-section');
+      const el = document.getElementById('filter-station');
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -1380,16 +1428,13 @@ export default function App() {
   const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consultName || !consultPhone) {
-      alert('성함과 연락처는 필수 입력 항목입니다.');
+      triggerNotification('성함과 연락처는 필수 입력 항목입니다.');
       return;
     }
 
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw768QQ_9in5Cr8sUQFtboMBH8spv3ORmRL7tB-rerfkHINBgd6nVp2ru90kM6sJNFYpw/exec';
-
     try {
-      await fetch(GOOGLE_SCRIPT_URL, {
+      const response = await fetch('/api/inquiry', {
         method: 'POST',
-        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientName: consultName,
@@ -1400,15 +1445,21 @@ export default function App() {
         })
       });
 
-      alert('상담 신청이 완료되었습니다!');
-      setIsConsultSubmitted(true);
-      setConsultName('');
-      setConsultPhone('');
-      setConsultText('');
-      setConsultPropertyId('');
-      setTimeout(() => setIsConsultSubmitted(false), 4500);
+      const resData = await response.json();
+
+      if (response.ok && resData.success) {
+        triggerNotification('상담 신청이 완료되었습니다.');
+        setIsConsultSubmitted(true);
+        setConsultName('');
+        setConsultPhone('');
+        setConsultText('');
+        setConsultPropertyId('');
+        setTimeout(() => setIsConsultSubmitted(false), 5000);
+      } else {
+        triggerNotification('전송 중 오류가 발생했습니다.');
+      }
     } catch (error) {
-      alert('전송 중 오류가 발생했습니다.');
+      triggerNotification('전송 중 오류가 발생했습니다.');
     }
   };
 
@@ -1490,19 +1541,58 @@ export default function App() {
         }
       }
 
-      // 2. Transaction Type Filter
-      if (selectedTransaction !== '전체') {
+      // 2. Transaction Type Filter (support both Naver style array multi-select and legacy state)
+      const hasNaverDealFilter = selectedTransactions && selectedTransactions.length > 0 && !selectedTransactions.includes('전체');
+      if (hasNaverDealFilter) {
+        // Check if property's transactionType matches selected transactions
+        let matchesDeal = false;
+
+        if (selectedTransactions.includes(prop.transactionType)) {
+          matchesDeal = true;
+        } else if (selectedTransactions.includes('단기임대')) {
+          // Map 단기임대 as low-deposit 월세 or tagged properties
+          const hasShortTermTag = prop.tags.some(t => t.includes('단기') || t.includes('한달') || t.includes('풀옵션'));
+          if (prop.transactionType === '월세' && (prop.priceValue <= 1000 || hasShortTermTag)) {
+            matchesDeal = true;
+          }
+        }
+
+        if (!matchesDeal) return false;
+      } else if (selectedTransaction !== '전체') {
         if (prop.transactionType !== selectedTransaction) return false;
       }
 
-      // 3. Price Limit Filters
-      if (priceLimit !== '전체') {
+      // 3. Price Limit Filters (using both legacy priceLimit and Naver-style priceMin/priceMax/rentMin/rentMax)
+      // Check Naver-style price limits
+      if (prop.transactionType === '월세') {
+        // Check Deposit (priceValue)
+        if (prop.priceValue < priceMin || prop.priceValue > priceMax) return false;
+        // Check Monthly Rent (rentValue)
+        const rentVal = prop.rentValue !== undefined ? prop.rentValue : 0;
+        if (rentVal < rentMin || rentVal > rentMax) return false;
+      } else {
+        // For 매매, 전세, 분양권 etc.
+        if (prop.priceValue < priceMin || prop.priceValue > priceMax) return false;
+      }
+
+      // Fallback custom legacy Price Limit Filters
+      if (priceLimit !== '전체' && priceMin === 0 && priceMax === 999999) {
         const val = parseInt(priceLimit);
         if (prop.priceValue > val) return false;
       }
 
-      // 4. Size Selection Range (in Pyongs)
-      if (sizeRange !== '전체') {
+      // 4. Size Selection Range (using Naver-style areaMin/areaMax or legacy sizeRange)
+      if (areaMin > 0 || areaMax < 999999) {
+        const pyongVal = prop.pyongValue;
+        if (areaUnit === 'pyong') {
+          if (pyongVal < areaMin || pyongVal > areaMax) return false;
+        } else {
+          // Convert pyong Value to m2 (roughly multiply by 3.3) and compare
+          const m2Val = Math.round(pyongVal * 3.3058);
+          if (m2Val < areaMin || m2Val > areaMax) return false;
+        }
+      } else if (sizeRange !== '전체') {
+        // Legacy range selection
         if (sizeRange === '10평대') {
           if (prop.pyongValue < 10 || prop.pyongValue >= 20) return false;
         } else if (sizeRange === '20평대') {
@@ -1514,27 +1604,102 @@ export default function App() {
         }
       }
 
-      // 5. Use approval year filters (신축, 5년, 10년이내)
-      if (useYear !== '전체') {
-        const currentYear = 2026;
-        const age = currentYear - prop.useYearValue;
-        if (useYear === '5년이내') {
-          if (age > 5) return false;
-        } else if (useYear === '10년이내') {
-          if (age > 10) return false;
-        } else if (useYear === '15년이내') {
-          if (age > 15) return false;
+      // 5. Rooms & Bathrooms (Naver style filters)
+      let roomsOfProp = 3;
+      let bathroomsOfProp = 2;
+      if (prop.category === '원룸') {
+        roomsOfProp = 1;
+        bathroomsOfProp = 1;
+      } else if (prop.category === '투룸') {
+        roomsOfProp = 2;
+        bathroomsOfProp = 1;
+      } else {
+        const joinedFeatures = prop.features.join(' ');
+        const rMatch = joinedFeatures.match(/방\s*(\d+)개/);
+        if (rMatch) roomsOfProp = parseInt(rMatch[1]);
+        const bMatch = joinedFeatures.match(/욕실\s*(\d+)개/);
+        if (bMatch) bathroomsOfProp = parseInt(bMatch[1]);
+      }
+
+      if (filterRooms !== '전체') {
+        if (filterRooms === '4개 이상') {
+          if (roomsOfProp < 4) return false;
+        } else {
+          const val = parseInt(filterRooms);
+          if (roomsOfProp !== val) return false;
         }
       }
 
-      // 6. Household Count limit
+      if (filterBathrooms !== '전체') {
+        if (filterBathrooms === '4개 이상') {
+          if (bathroomsOfProp < 4) return false;
+        } else {
+          const val = parseInt(filterBathrooms);
+          if (bathroomsOfProp !== val) return false;
+        }
+      }
+
+      // 6. Floor (Naver style)
+      if (filterFloor !== '전체') {
+        const fl = (prop.floorText || prop.floor || '').toLowerCase();
+        const isBasement = fl.includes('지하');
+        const isFirst = fl.includes('1층/') || fl.startsWith('1층') || fl === '1층';
+        
+        if (filterFloor === '1층' && !isFirst) return false;
+        if (filterFloor === '지하층' && !isBasement) return false;
+        if (filterFloor === '지상층(1층제외)' && (isBasement || isFirst)) return false;
+      }
+
+      // 7. Age / Completion Date (Naver style or legacy useYear)
+      if (filterUseYear !== '전체') {
+        const currentYear = 2026;
+        const buildingAge = currentYear - prop.useYearValue;
+        if (filterUseYear === '입주예정') {
+          if (prop.useYearValue < 2026) return false;
+        } else if (filterUseYear === '2년') {
+          if (buildingAge > 2) return false;
+        } else if (filterUseYear === '4년') {
+          if (buildingAge > 4) return false;
+        } else if (filterUseYear === '10년') {
+          if (buildingAge > 10) return false;
+        } else if (filterUseYear === '15년') {
+          if (buildingAge > 15) return false;
+        } else if (filterUseYear === '20년') {
+          if (buildingAge > 20) return false;
+        } else if (filterUseYear === '25년') {
+          if (buildingAge > 25) return false;
+        } else if (filterUseYear === '30년') {
+          if (buildingAge > 30) return false;
+        }
+      } else if (useYear !== '전체') {
+        // Legacy year filter
+        const currentYear = 2026;
+        const buildingAge = currentYear - prop.useYearValue;
+        if (useYear === '5년이내') {
+          if (buildingAge > 5) return false;
+        } else if (useYear === '10년이내') {
+          if (buildingAge > 10) return false;
+        } else if (useYear === '15년이내') {
+          if (buildingAge > 15) return false;
+        }
+      }
+
+      // 8. Directions (Naver style)
+      const hasDirFilter = filterDirections && filterDirections.length > 0 && !filterDirections.includes('전체');
+      if (hasDirFilter) {
+        const propDir = prop.direction || '';
+        const matchesSome = filterDirections.some(d => d !== '전체' && propDir.includes(d));
+        if (!matchesSome) return false;
+      }
+
+      // 9. Household Count limit
       if (householdCount !== '전체') {
         if (householdCount === '대단지') {
           if (prop.householdsCount < 1000) return false;
         }
       }
 
-      // 7. Advanced keyword queries (Fuzzy search)
+      // 10. Advanced keyword queries (Fuzzy search)
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         const matchesName = prop.name.toLowerCase().includes(query);
@@ -1547,7 +1712,32 @@ export default function App() {
 
       return true;
     });
-  }, [properties, selectedCategory, activeSubPills, selectedTransaction, priceLimit, sizeRange, useYear, householdCount, searchQuery, favorites]);
+  }, [
+    properties,
+    selectedCategory,
+    activeSubPills,
+    selectedTransaction,
+    priceLimit,
+    sizeRange,
+    useYear,
+    householdCount,
+    searchQuery,
+    favorites,
+    selectedTransactions,
+    priceCriterion,
+    priceMin,
+    priceMax,
+    rentMin,
+    rentMax,
+    areaUnit,
+    areaMin,
+    areaMax,
+    filterRooms,
+    filterBathrooms,
+    filterFloor,
+    filterUseYear,
+    filterDirections
+  ]);
 
   // Compute elegant visual label text representing all active categories
   const displayedCategoryText = useMemo(() => {
@@ -1938,8 +2128,8 @@ export default function App() {
             {/* Desktop Navigation Menus (매물검색 / 지도검색) */}
             <nav className="hidden lg:flex items-center gap-2.5 flex-wrap" id="desktop-nav-menus">
               {[
-                { name: '매물검색', id: 'listings-section', icon: <Search className="w-3.5 h-3.5 shrink-0" /> },
-                { name: '지도검색', id: 'listings-section', icon: <MapIcon className="w-3.5 h-3.5 shrink-0" /> }
+                { name: '매물검색', id: 'filter-station', icon: <Search className="w-3.5 h-3.5 shrink-0" /> },
+                { name: '지도검색', id: 'filter-station', icon: <MapIcon className="w-3.5 h-3.5 shrink-0" /> }
               ].map((menu) => {
                 const isSelected = activeTab === menu.name;
                 return (
@@ -1980,18 +2170,18 @@ export default function App() {
                 <span>매물접수</span>
               </button>
 
-              {/* 관리자 On/Off Button */}
+              {/* 로그인 On/Off Button */}
               <button
-                onClick={() => setIsAdminMode(!isAdminMode)}
+                onClick={handleAdminToggleClick}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
                   isAdminMode 
                     ? 'bg-amber-600 text-white border-amber-500 shadow-md scale-[1.02]' 
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                 }`}
-                title="매물 직접 등록 및 관리"
+                title="관리자 로그인"
               >
                 <Lock className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" />
-                <span>{isAdminMode ? '관리자 On' : '🔑 관리자'}</span>
+                <span>{isAdminMode ? '로그아웃' : '🔑 로그인'}</span>
               </button>
 
               {/* 051-897-8900 전화번호 */}
@@ -2062,10 +2252,10 @@ export default function App() {
                         key={item}
                         onClick={() => {
                           if (item === '매물검색' || item === '지도검색' || item === '오시는길' || item === '매물접수') {
-                            handleNavClick(item, item === '오시는길' ? 'map-section' : item === '매물접수' ? 'inquiry-section' : 'listings-section');
+                            handleNavClick(item, item === '오시는길' ? 'map-section' : item === '매물접수' ? 'inquiry-section' : 'filter-station');
                           } else {
                             applyPresetFilter(item as FilterCategory, '전체');
-                            handleNavClick(item, 'listings-section');
+                            handleNavClick(item, 'filter-station');
                           }
                           setIsMobileMenuOpen(false);
                         }}
@@ -2084,15 +2274,15 @@ export default function App() {
                 <div className="bg-amber-50/50 backdrop-blur-xs p-4 rounded-xl border border-amber-100/55 flex flex-col gap-2.5">
                   <button
                     onClick={() => {
-                      setIsAdminMode(!isAdminMode);
                       setIsMobileMenuOpen(false);
+                      handleAdminToggleClick();
                     }}
                     className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-black text-xs transition-colors cursor-pointer ${
                       isAdminMode ? 'bg-amber-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                     }`}
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    <span>{isAdminMode ? '관리자 모드 활성 (On)' : '🔑 중개사 관리자 모드 On'}</span>
+                    <span>{isAdminMode ? '로그아웃' : '🔑 로그인'}</span>
                   </button>
 
                   <div className="border-t border-dashed border-amber-100 pt-2.5">
@@ -2120,22 +2310,22 @@ export default function App() {
       {/* ==========================================
           HERO SECTION: GOLDEN SUNSHINE
           ========================================== */}
-      <section className="relative bg-gradient-to-b from-amber-100/35 via-amber-200/10 to-transparent border-b border-amber-100 py-6 md:py-8">
+      <section className="relative bg-gradient-to-b from-amber-100/35 via-amber-200/10 to-transparent py-6 md:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          {/* Top content layout: Titles & Filter Station on Left, Consultation on Right */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-6">
-            <div className="lg:col-span-7 xl:col-span-8 text-left relative overflow-hidden bg-white/95 border border-amber-200/60 p-6 sm:p-8 md:p-10 rounded-3xl shadow-xl flex flex-col justify-center gap-6 min-h-[350px] md:min-h-[380px]">
+          {/* Top content layout: Titles & Filter Station */}
+          <div className="mb-6">
+            <div className="w-full text-left relative overflow-hidden bg-white/95 border border-amber-200/60 p-6 sm:p-8 md:p-10 rounded-3xl shadow-xl flex flex-col justify-center gap-6 min-h-[300px] md:min-h-[320px]">
               
               {/* Background Map Image behind the text with soft white fade */}
               <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl">
                 <img 
                   src={busanRegionMap} 
                   alt="부산 지역 지도 배경" 
-                  className="absolute right-0 top-1/2 -translate-y-1/2 w-[70%] sm:w-[65%] md:w-[50%] lg:w-[65%] xl:w-[60%] h-full object-cover opacity-60 filter contrast-[1.05] brightness-[1.1]"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 w-[70%] sm:w-[65%] md:w-[50%] lg:w-[45%] xl:w-[40%] h-full object-cover opacity-60 filter contrast-[1.05] brightness-[1.1]"
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-white via-white/85 to-transparent" />
               </div>
 
               {/* Text content layout inside hero */}
@@ -2160,81 +2350,7 @@ export default function App() {
                 </p>
               </div>
 
-            </div> {/* Close Left Box Column */}
-
-            {/* Right Box: Online Consultation Form (Aligns perfectly at the bottom with Left Columns filters) */}
-            <div className="lg:col-span-5 xl:col-span-4 w-full flex flex-col justify-end text-left" id="inquiry-section">
-              <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-amber-200/60 p-5 shadow-lg flex flex-col gap-4 text-left h-full justify-between">
-                <div>
-                  <div className="border-b border-amber-100 pb-3 mb-4">
-                    <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-sm sm:text-base shadow-xs">
-                      <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
-                      <span>실시간 온라인 상담 신청</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
-                      남겨주시면 부강 대표 고민주 소장이 직접 1시간 이내 신속 대조 연락 드립니다.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
-                    <input
-                      type="text"
-                      placeholder="성함"
-                      value={consultName}
-                      onChange={(e) => setConsultName(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    />
-
-                    <input
-                      type="tel"
-                      placeholder="연락처"
-                      value={consultPhone}
-                      onChange={(e) => setConsultPhone(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    />
-
-                    <select
-                      value={consultType}
-                      onChange={(e) => setConsultType(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                    >
-                      <option value="매수문의">매수 문의</option>
-                      <option value="매도문의">매도 문의</option>
-                      <option value="매물접수">매물 접수</option>
-                      <option value="상담문의">일반 상담</option>
-                    </select>
-
-                    <textarea
-                      placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-                      value={consultText}
-                      onChange={(e) => setConsultText(e.target.value)}
-                      rows={3}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    />
-
-                    <button
-                      type="submit"
-                      className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-xl transition-colors cursor-pointer text-xs"
-                    >
-                      상담 신청 보내기
-                    </button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-center mt-3">
-                  <div className="flex-1">
-                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-                    <div className="text-xs font-black text-slate-800">14건</div>
-                  </div>
-                  <div className="w-px h-6 bg-slate-200" />
-                  <div className="flex-1">
-                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-                    <div className="text-xs font-black text-amber-600">30분 내</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+            </div> {/* Close Box Column */}
           </div>
 
           {/* ==========================================
@@ -2466,9 +2582,6 @@ export default function App() {
 
             </div>
           </div>
-
-
-
         </div>
       </section>
 
@@ -2476,19 +2589,19 @@ export default function App() {
           DYNAMIC FLOATING LEFT WING STATION (STAYS IN THE LEFT EMPTY MARGIN OF ULTRA-WIDE MONITORS)
           ========================================== */}
       <div 
-        className="hidden min-[1685px]:flex flex-col gap-5 fixed top-[180px] left-3 min-[1685px]:left-[calc(50%-835px)] z-40 w-[170px]" 
+        className="hidden min-[1880px]:flex flex-col gap-5 fixed top-[180px] left-[calc(50%-865px)] z-43 w-[210px]" 
         id="floating-wing-banner"
       >
         {/* 1. 카테고리 검색 Widget (Premium Style Accordion Menu UI matching landing page brand colors) */}
         <div className="bg-white border-2 border-amber-500/15 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-shadow">
-          <div className="bg-slate-900 border-b border-amber-500/20 px-3 py-3 flex items-center gap-2">
-            <div className="bg-amber-500 text-slate-950 p-1 rounded-lg shrink-0">
+          <div className="bg-slate-900 border-b border-amber-500/20 px-3.5 py-3.5 flex items-center gap-2">
+            <div className="bg-amber-500 text-slate-950 p-1.5 rounded-lg shrink-0">
               <svg className="w-4 h-4 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
             </div>
-            <h3 className="text-white text-[12.5px] font-black tracking-tight leading-none uppercase select-none">카테고리 검색</h3>
+            <h3 className="text-white text-[13.5px] font-black tracking-tight leading-none uppercase select-none">카테고리 검색</h3>
           </div>
           
           {/* Category buttons list with arrow indicators matching landing page image */}
@@ -2515,14 +2628,14 @@ export default function App() {
                 <button
                   key={item.name}
                   onClick={() => handleCategoryCardClick(item.name)}
-                  className={`w-full py-2.5 px-3 flex items-center justify-between text-left cursor-pointer transition-all duration-150 ${
+                  className={`w-full py-3 px-4 flex items-center justify-between text-left cursor-pointer transition-all duration-150 ${
                     isActive
                       ? 'bg-amber-50/75 border-l-4 border-amber-500 font-extrabold text-amber-900 shadow-2xs'
                       : 'bg-white hover:bg-slate-50 text-slate-700 font-bold hover:text-slate-950'
                   }`}
                 >
-                  <span className="text-[11px] tracking-tight">{item.label}</span>
-                  <span className={`text-[9px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-300'} transition-transform duration-200`}>▼</span>
+                  <span className="text-[12.5px] tracking-tight">{item.label}</span>
+                  <span className={`text-[10px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-300'} transition-transform duration-200`}>▼</span>
                 </button>
               );
             })}
@@ -2530,11 +2643,11 @@ export default function App() {
         </div>
 
         {/* 2. Portal Search Banner (Green & multicolors custom widget) */}
-        <div className="bg-white border-2 border-slate-150 rounded-2xl p-3 shadow-xs hover:shadow-md transition-shadow flex flex-col items-center justify-center text-center gap-2.5">
+        <div className="bg-white border-2 border-slate-150 rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-shadow flex flex-col items-center justify-center text-center gap-2.5">
           <div className="flex items-center gap-1.5 justify-center">
-            <span className="text-[#03C75A] font-extrabold text-[12px] tracking-tight hover:underline cursor-pointer">NAVER</span>
+            <span className="text-[#03C75A] font-extrabold text-[12.5px] tracking-tight hover:underline cursor-pointer">NAVER</span>
             <span className="text-slate-300 font-normal">|</span>
-            <span className="font-extrabold text-[12px] tracking-tight flex items-center">
+            <span className="font-extrabold text-[12.5px] tracking-tight flex items-center">
               <span className="text-[#1e90ff]">D</span>
               <span className="text-[#ff4500]">a</span>
               <span className="text-[#ffd700]">u</span>
@@ -2543,13 +2656,13 @@ export default function App() {
           </div>
           
           {/* portal search bar graphic emulation */}
-          <div className="w-full h-7 flex items-center justify-between px-2 rounded-sm border-2 border-[#03C75A] bg-white shadow-3xs cursor-pointer hover:bg-slate-50/50">
-            <span className="text-[10px] font-black text-slate-900">부강부동산</span>
-            <span className="text-[#03C75A] text-[8px] font-black">▼</span>
+          <div className="w-full h-8 flex items-center justify-between px-2.5 rounded-sm border-2 border-[#03C75A] bg-white shadow-3xs cursor-pointer hover:bg-slate-50/50">
+            <span className="text-[11px] font-black text-slate-900">부강부동산</span>
+            <span className="text-[#03C75A] text-[9px] font-black">▼</span>
           </div>
 
           <div className="flex flex-col gap-1 leading-tight text-center">
-            <p className="text-[10px] font-black text-slate-800 tracking-tight">
+            <p className="text-[11px] font-black text-slate-800 tracking-tight">
               포털 검색창에 <span className="text-amber-600 block font-black underline decoration-wavy decoration-amber-500/50">&ldquo;부강공인중개사&rdquo;</span>를 검색하세요!
             </p>
           </div>
@@ -2560,73 +2673,89 @@ export default function App() {
           DYNAMIC FLOATING RIGHT WING STATION (STAYS IN THE RIGHT EMPTY MARGIN OF ULTRA-WIDE MONITORS)
           ========================================== */}
       <div 
-        className="hidden min-[1685px]:flex flex-col gap-5 fixed top-[180px] right-3 min-[1685px]:right-[calc(50%-835px)] z-40 w-[240px]" 
+        className="hidden min-[1880px]:flex flex-col gap-5 fixed top-[180px] right-[calc(50%-940px)] z-43 w-[280px]" 
         id="floating-right-wing-banner"
       >
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl border-2 border-amber-500/15 p-4 shadow-lg flex flex-col gap-3.5 text-left">
-          <div className="border-b border-amber-100 pb-2">
-            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-[12.5px] shadow-xs">
-              <Mail className="w-4 h-4 text-amber-500 animate-pulse" />
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl border-2 border-amber-500/15 p-5 shadow-lg flex flex-col gap-4 text-left">
+          <div className="border-b border-amber-100 pb-2.5">
+            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-[14px] shadow-xs">
+              <Mail className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
               <span>실시간 온라인 상담 신청</span>
             </div>
-            <p className="text-[9.5px] text-slate-400 font-bold leading-normal mt-1">
+            <p className="text-[10px] text-slate-400 font-bold leading-relaxed mt-1">
               부강 대표 고민주 소장이 접수 즉시 신속히 대조 연락 드립니다.
             </p>
           </div>
 
-          <form onSubmit={handleInquirySubmit} className="flex flex-col gap-2.5">
-            <input
-              type="text"
-              placeholder="성함"
-              value={consultName}
-              onChange={(e) => setConsultName(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-
-            <input
-              type="tel"
-              placeholder="연락처"
-              value={consultPhone}
-              onChange={(e) => setConsultPhone(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-
-            <select
-              value={consultType}
-              onChange={(e) => setConsultType(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+          {isConsultSubmitted ? (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center justify-center py-6 text-center gap-3"
             >
-              <option value="매수문의">매수 문의</option>
-              <option value="매도문의">매도 문의</option>
-              <option value="매물접수">매물 접수</option>
-              <option value="상담문의">일반 상담</option>
-            </select>
+              <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-100 shadow-xs animate-bounce">
+                <Check className="w-6 h-6 stroke-[3]" />
+              </div>
+              <span className="text-[13px] font-black text-emerald-600 block">상담 신청이 완료되었습니다!</span>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed px-1">
+                대표 소장이 내역을 메일로 즉시 수신 받았으며 신속히 연락 드리겠습니다.
+              </p>
+            </motion.div>
+          ) : (
+            <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="성함"
+                value={consultName}
+                onChange={(e) => setConsultName(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
 
-            <textarea
-              placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-              value={consultText}
-              onChange={(e) => setConsultText(e.target.value)}
-              rows={3}
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
+              <input
+                type="tel"
+                placeholder="연락처"
+                value={consultPhone}
+                onChange={(e) => setConsultPhone(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
 
-            <button
-              type="submit"
-              className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 rounded-lg transition-colors cursor-pointer text-xs"
-            >
-              상담 신청 보내기
-            </button>
-          </form>
+              <select
+                value={consultType}
+                onChange={(e) => setConsultType(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+              >
+                <option value="매수문의">매수 문의</option>
+                <option value="매도문의">매도 문의</option>
+                <option value="매물접수">매물 접수</option>
+                <option value="상담문의">일반 상담</option>
+              </select>
 
-          <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100 flex items-center justify-between text-center mt-1">
+              <textarea
+                placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+                value={consultText}
+                onChange={(e) => setConsultText(e.target.value)}
+                rows={3}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+
+              <button
+                type="submit"
+                className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-lg transition-colors cursor-pointer text-xs tracking-wide"
+              >
+                상담 신청 보내기
+              </button>
+            </form>
+          )}
+
+          <div className="bg-slate-50/80 rounded-lg p-2.5 border border-slate-100 flex items-center justify-between text-center mt-1">
             <div className="flex-1">
-              <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-              <div className="text-[11px] font-black text-slate-800">14건</div>
+              <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
+              <div className="text-[12px] font-black text-slate-800">14건</div>
             </div>
-            <div className="w-px h-5 bg-slate-200" />
+            <div className="w-px h-6 bg-slate-200" />
             <div className="flex-1">
-              <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-              <div className="text-[11px] font-black text-amber-600">30분 내</div>
+              <div className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
+              <div className="text-[12px] font-black text-amber-600">30분 내</div>
             </div>
           </div>
         </div>
@@ -2635,9 +2764,9 @@ export default function App() {
       {/* ==========================================
           RESPONSIVE COLLAPSIBLE LEFT & RIGHT EDGE TABS & DRAWERS (FOR NARROW/ZOOMED SCREEN OVERLAP SOLUTIONS)
           ========================================== */}
-      <div className="flex min-[1685px]:hidden">
+      <div className="flex">
         {/* Left-edge projecting tabs */}
-        <div className="fixed left-0 top-[230px] z-45 flex flex-col gap-2.5">
+        <div className="fixed left-0 top-[230px] z-45 flex flex-col gap-2.5 min-[1880px]:hidden">
           {/* TAB: 카테고리별 */}
           <button
             onClick={() => {
@@ -2653,7 +2782,7 @@ export default function App() {
         </div>
 
         {/* Right-edge projecting tabs */}
-        <div className="fixed right-0 top-[230px] z-45 flex flex-col gap-2.5">
+        <div className="fixed right-0 top-[230px] z-45 flex flex-col gap-2.5 min-[1880px]:hidden">
           {/* TAB: 실시간 상담신청 */}
           <button
             onClick={() => {
@@ -2679,7 +2808,7 @@ export default function App() {
                 setIsSideCategoryOpen(false);
                 setIsSideConsultOpen(false);
               }}
-              className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-40"
+              className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-44"
             />
           )}
         </AnimatePresence>
@@ -2693,10 +2822,10 @@ export default function App() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '-100%', opacity: 0.8 }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed left-0 top-[180px] z-45 w-[210px] bg-white border-y-2 border-r-2 border-amber-500/20 rounded-r-2xl shadow-2xl p-3.5 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
+              className="fixed left-0 top-[180px] z-45 w-[240px] bg-white border-y-2 border-r-2 border-amber-500/20 rounded-r-2xl shadow-2xl p-4 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
             >
-              <div className="flex items-center justify-between border-b border-amber-100 pb-2 flex-shrink-0">
-                <span className="text-[12.5px] font-black text-slate-950 flex items-center gap-1.5">
+              <div className="flex items-center justify-between border-b border-amber-100 pb-2.5 flex-shrink-0">
+                <span className="text-[13px] font-black text-slate-950 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
                   카테고리 검색
                 </span>
@@ -2735,24 +2864,24 @@ export default function App() {
                         handleCategoryCardClick(item.name);
                         setIsSideCategoryOpen(false); // Close drawer on selection for elegant user flow
                       }}
-                      className={`w-full py-2.5 px-3 flex items-center justify-between text-left cursor-pointer transition-all duration-155 text-[11px] ${
+                      className={`w-full py-3 px-4 flex items-center justify-between text-left cursor-pointer transition-all duration-155 text-[12.5px] ${
                         isActive
                           ? 'bg-amber-50/75 border-l-4 border-amber-500 font-extrabold text-amber-900 shadow-2xs'
                           : 'bg-white hover:bg-slate-50 text-slate-700 font-bold hover:text-slate-950'
                       }`}
                     >
                       <span className="truncate">{item.label}</span>
-                      <span className={`text-[8px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-350'} transition-transform duration-200`}>▼</span>
+                      <span className={`text-[9px] transform ${isActive ? 'text-amber-500 rotate-180' : 'text-slate-350'} transition-transform duration-200`}>▼</span>
                     </button>
                   );
                 })}
               </div>
 
               {/* Mini Portal Promotion */}
-              <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center flex flex-col gap-1.5 mt-auto">
-                <span className="text-[#03C75A] font-extrabold text-[11px]">NAVER</span>
-                <span className="text-[10px] text-slate-700 font-black">“부강공인중개사”</span>
-                <span className="text-[8.5px] text-slate-400 font-bold">인터넷 실시간 공식 매물</span>
+              <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-center flex flex-col gap-1.5 mt-auto">
+                <span className="text-[#03C75A] font-extrabold text-[12px]">NAVER</span>
+                <span className="text-[11px] text-slate-700 font-black">“부강공인중개사”</span>
+                <span className="text-[9.5px] text-slate-400 font-bold">인터넷 실시간 공식 매물</span>
               </div>
             </motion.div>
           )}
@@ -2764,410 +2893,1385 @@ export default function App() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0.8 }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed right-0 top-[180px] z-45 w-[250px] bg-white border-y-2 border-l-2 border-amber-500/20 rounded-l-2xl shadow-2xl p-4 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
+              className="fixed right-0 top-[180px] z-45 w-[290px] bg-white border-y-2 border-l-2 border-amber-500/20 rounded-l-2xl shadow-2xl p-4.5 overflow-y-auto max-h-[calc(100vh-230px)] flex flex-col gap-4"
             >
-              <div className="flex items-center justify-between border-b border-amber-100 pb-2 flex-shrink-0">
-                <span className="text-[12px] font-black text-slate-950 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+              <div className="flex items-center justify-between border-b border-amber-100 pb-2.5 flex-shrink-0">
+                <span className="text-[13px] font-black text-slate-900 flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-amber-500 animate-pulse" />
                   실시간 온라인 상담 신청
                 </span>
                 <button
                   onClick={() => setIsSideConsultOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                  className="p-1 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <form onSubmit={(e) => {
-                handleInquirySubmit(e);
-                setIsSideConsultOpen(false);
-              }} className="flex flex-col gap-2.5">
-                <input
-                  type="text"
-                  placeholder="성함"
-                  value={consultName}
-                  onChange={(e) => setConsultName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+              <p className="text-[10.5px] text-slate-400 font-bold leading-relaxed -mt-1">
+                대표 소장이 접수 즉시 신속히 대조 연락 드립니다.
+              </p>
 
-                <input
-                  type="tel"
-                  placeholder="연락처"
-                  value={consultPhone}
-                  onChange={(e) => setConsultPhone(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
-
-                <select
-                  value={consultType}
-                  onChange={(e) => setConsultType(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+              {isConsultSubmitted ? (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center py-6 text-center gap-3"
                 >
-                  <option value="매수문의">매수 문의</option>
-                  <option value="매도문의">매도 문의</option>
-                  <option value="매물접수">매물 접수</option>
-                  <option value="상담문의">일반 상담</option>
-                </select>
+                  <div className="w-11 h-11 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-100 shadow-xs animate-bounce">
+                    <Check className="w-5.5 h-5.5 stroke-[3]" />
+                  </div>
+                  <span className="text-[12.5px] font-black text-emerald-600 block">상담 신청이 완료되었습니다!</span>
+                  <p className="text-[10px] text-slate-500 font-bold leading-relaxed px-1">
+                    대표 소장이 내역을 메일로 즉시 수신 받았으며 신속히 연락 드리겠습니다.
+                  </p>
+                </motion.div>
+              ) : (
+                <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3">
+                  <input
+                    type="text"
+                    placeholder="성함"
+                    value={consultName}
+                    onChange={(e) => setConsultName(e.target.value)}
+                    className="w-full border border-slate-205 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-slate-800"
+                  />
 
-                <textarea
-                  placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
-                  value={consultText}
-                  onChange={(e) => setConsultText(e.target.value)}
-                  rows={4}
-                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                  <input
+                    type="text"
+                    placeholder="연락처"
+                    value={consultPhone}
+                    onChange={(e) => setConsultPhone(e.target.value)}
+                    className="w-full border border-slate-205 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-slate-800"
+                  />
 
-                <button
-                  type="submit"
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 rounded-lg transition-colors cursor-pointer text-xs"
-                >
-                  상담 신청 보내기
-                </button>
-              </form>
+                  <select
+                    value={consultType}
+                    onChange={(e) => setConsultType(e.target.value)}
+                    className="w-full border border-slate-205 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                  >
+                    <option value="매수문의">매수 문의</option>
+                    <option value="매도문의">매도 문의</option>
+                    <option value="매물접수">매물 접수</option>
+                    <option value="상담문의">일반 상담</option>
+                  </select>
 
-              <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100 flex items-center justify-between text-center mt-auto">
+                  <textarea
+                    placeholder="상담 내용 또는 접수할 매물 정보를 입력해주세요."
+                    value={consultText}
+                    onChange={(e) => setConsultText(e.target.value)}
+                    rows={4}
+                    className="w-full border border-slate-205 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-slate-800"
+                  />
+
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2.5 rounded-lg transition-colors cursor-pointer text-xs"
+                  >
+                    상담 신청 보내기
+                  </button>
+                </form>
+              )}
+
+              <div className="bg-slate-50 border border-slate-150 rounded-lg p-2 flex items-center justify-between text-center">
                 <div className="flex-1">
-                  <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">금일 상담접수</div>
-                  <div className="text-[11px] font-black text-slate-800">14건</div>
+                  <div className="text-[8.5px] text-slate-400 font-bold mb-0.5">금일 접수</div>
+                  <div className="text-[11.5px] font-black text-slate-800">14건</div>
                 </div>
-                <div className="w-px h-5 bg-slate-200" />
+                <div className="w-px h-6 bg-slate-200" />
                 <div className="flex-1">
-                  <div className="text-[8.5px] text-slate-400 font-bold uppercase mb-0.5">평균 대응</div>
-                  <div className="text-[11px] font-black text-amber-600">30분 내</div>
+                  <div className="text-[8.5px] text-slate-400 font-bold mb-0.5">평균 대응</div>
+                  <div className="text-[11.5px] font-black text-amber-600">30분 내</div>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </div> {/* Close responsive layout wrapper */}
 
       {/* ==========================================
-          MAIN AREA: GRID LISTINGS & CONSULT SIDEBAR
+          STICKY PREMIUM NAVER REAL ESTATE FILTERS (Visible on both desktop & mobile)
           ========================================== */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow border-t border-amber-100/40" id="listings-section">
-        
-        {/* Real Estate Responsive Main Shell Container - Styled as a spacious full-width container */}
-        <div className="w-full flex flex-col gap-6">
-
-          {/* ==========================================
-              STICKY FILTER COMPONENT (Pins right under header on scroll)
-              ========================================== */}
-          <div className="sticky top-[60px] sm:top-[72px] lg:top-[73px] z-35 bg-white/95 backdrop-blur-md border border-amber-200/50 sm:rounded-2xl shadow-md p-3 flex flex-col gap-3 mb-2 -mx-4 sm:mx-0">
-            {/* Top row: Horizontal scrollable Category pills */}
-            <div className="flex items-center justify-between gap-3 border-b border-amber-100/50 pb-2">
-              <span className="text-[11px] font-black text-slate-800 flex items-center gap-1 shrink-0">
-                <Filter className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                <span>간편 필터</span>
-              </span>
+      <div id="filter-station" className="sticky top-[108px] z-40 bg-white py-3 scroll-mt-[130px]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-2.5">
+            {/* Top Row: Category Selection Pills (전체, 아파트, 오피스텔, 분양권, 원룸, 투룸, 주택, 빌라, 상가, 공장, 토지) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 pb-1.5 mb-0.5">
+              <span className="text-[11px] font-black text-amber-950 shrink-0 bg-amber-500/10 border border-amber-500/15 px-2.5 py-1 rounded-lg mr-1 sm:mr-1.5">매물유형</span>
               
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-grow pr-1">
-                {/* '전체' Category button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
-                    setActiveSubPills(AVAILABLE_CATEGORIES);
-                    setSelectedCategory('전체');
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shrink-0 cursor-pointer ${
-                    (activeSubPills.length >= 10 || activeSubPills.includes('전체') || selectedCategory === '전체')
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-950 hover:bg-slate-200'
-                  }`}
-                >
-                  전체
-                </button>
+              {/* Entire/All Pill */}
+              <button
+                onClick={() => {
+                  setActiveSubPills(['전체']);
+                  setSelectedCategory('전체');
+                  setViewMode('map');
+                  setTimeout(() => {
+                    const el = document.getElementById('filter-station');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }, 100);
+                }}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-black transition-all shrink-0 cursor-pointer border ${
+                  activeSubPills.includes('전체') || activeSubPills.length === 0
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                    : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                전체
+              </button>
 
-                {[
-                  { label: '아파트', value: '아파트' },
-                  { label: '오피스텔', value: '오피스텔' },
-                  { label: '분양권', value: '분양권' },
-                  { label: '원룸', value: '원룸' },
-                  { label: '투룸', value: '투룸' },
-                  { label: '주택', value: '주택' },
-                  { label: '빌라', value: '빌라' },
-                  { label: '상가', value: '상가' },
-                  { label: '공장', value: '공장' },
-                  { label: '토지', value: '토지' }
-                ].map((cat) => {
-                  const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
-                  const isAll = activeSubPills.length >= AVAILABLE_CATEGORIES.length || activeSubPills.includes('전체') || selectedCategory === '전체';
-                  const isSelected = !isAll && (activeSubPills.includes(cat.value) || (activeSubPills.includes('아파트 오피스텔') && (cat.value === '아파트' || cat.value === '오피스텔')));
+              {[
+                { label: '아파트', value: '아파트' },
+                { label: '오피스텔', value: '오피스텔' },
+                { label: '분양권', value: '분양권' },
+                { label: '원룸·투룸', value: '원룸·투룸' },
+                { label: '빌라', value: '빌라' },
+                { label: '주택', value: '주택' },
+                { label: '상가', value: '상가' },
+                { label: '공장', value: '공장' },
+                { label: '토지', value: '토지' }
+              ].map((item) => {
+                let isSelected = false;
+                if (item.value === '원룸·투룸') {
+                  isSelected = activeSubPills.includes('원룸') && activeSubPills.includes('투룸');
+                } else {
+                  isSelected = activeSubPills.includes(item.value);
+                }
 
-                  return (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() => {
-                        if (isAll) {
-                          setActiveSubPills([cat.value]);
-                          setSelectedCategory(cat.value as FilterCategory);
+                return (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      let nextPills = [...activeSubPills];
+                      // Remove '전체' if it exists
+                      if (nextPills.includes('전체')) {
+                        nextPills = nextPills.filter(p => p !== '전체');
+                      }
+
+                      if (item.value === '원룸·투룸') {
+                        const hasBoth = nextPills.includes('원룸') && nextPills.includes('투룸');
+                        if (hasBoth) {
+                          // Remove both
+                          nextPills = nextPills.filter(p => p !== '원룸' && p !== '투룸');
                         } else {
-                          let nextPills = [...activeSubPills];
-                          if (nextPills.includes('아파트 오피스텔')) {
-                            nextPills = nextPills.filter(p => p !== '아파트 오피스텔');
-                            if (!nextPills.includes('아파트')) nextPills.push('아파트');
-                            if (!nextPills.includes('오피스텔')) nextPills.push('오피스텔');
-                          }
-                          if (nextPills.includes(cat.value)) {
-                            if (nextPills.length <= 1) {
-                              nextPills = AVAILABLE_CATEGORIES;
-                              setSelectedCategory('전체');
-                            } else {
-                              nextPills = nextPills.filter(p => p !== cat.value);
-                              setSelectedCategory(nextPills[0] as FilterCategory);
-                            }
-                          } else {
-                            nextPills.push(cat.value);
-                            if (nextPills.length >= AVAILABLE_CATEGORIES.length) {
-                              setSelectedCategory('전체');
-                            } else {
-                              setSelectedCategory(cat.value as FilterCategory);
-                            }
-                          }
-                          setActiveSubPills(nextPills);
+                          // Add both (and ensure uniquely represented)
+                          if (!nextPills.includes('원룸')) nextPills.push('원룸');
+                          if (!nextPills.includes('투룸')) nextPills.push('투룸');
                         }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shrink-0 cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:text-slate-950 hover:bg-slate-200'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
+                      } else {
+                        if (nextPills.includes(item.value)) {
+                          nextPills = nextPills.filter(p => p !== item.value);
+                        } else {
+                          nextPills.push(item.value);
+                        }
+                      }
+
+                      if (nextPills.length === 0) {
+                        nextPills = ['전체'];
+                        setSelectedCategory('전체');
+                      } else {
+                        // Maintain selectedCategory reference
+                        if (nextPills.length === 1) {
+                          setSelectedCategory(nextPills[0] as FilterCategory);
+                        } else {
+                          setSelectedCategory('전체');
+                        }
+                      }
+                      setActiveSubPills(nextPills);
+
+                      // View mode map switch + smooth scroll
+                      setViewMode('map');
+                      setTimeout(() => {
+                        const el = document.getElementById('filter-station');
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }, 100);
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-black transition-all shrink-0 cursor-pointer border ${
+                      isSelected && !activeSubPills.includes('전체')
+                        ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-white border-slate-205 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Bottom row: Compact Dropdowns & Transaction type pills */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div className="flex flex-wrap items-center gap-2 flex-grow">
-                {/* Transaction type pill selectors */}
-                <div className="bg-slate-100 p-0.5 rounded-xl flex items-center min-w-[150px] sm:min-w-[170px] shrink-0">
-                  {(['전체', '매매', '전세', '월세'] as TransactionType[]).map((type) => (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                
+                {/* Horizontal Scrolling Naver Filters Group */}
+                <div className="flex flex-wrap items-center gap-1.5 py-1 flex-grow">
+                  
+                  {/* 1. 거래방식 Selector */}
+                  <div className="relative shrink-0">
                     <button
-                      key={type}
-                      onClick={() => setSelectedTransaction(type)}
-                      className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-all text-center cursor-pointer ${
-                        selectedTransaction === type
-                          ? 'bg-white text-slate-950 shadow-xs ring-1 ring-amber-400/20'
-                          : 'text-slate-500 hover:text-slate-800'
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'deal' ? null : 'deal')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (!selectedTransactions.includes('전체') && selectedTransactions.length > 0)
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {type}
+                      <span>
+                        {selectedTransactions.includes('전체') || selectedTransactions.length === 0
+                          ? '거래방식'
+                          : selectedTransactions.join(', ')}
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
                     </button>
-                  ))}
-                </div>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'deal' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[260px] flex flex-col gap-3"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-sm text-slate-800">거래방식</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          
+                          <div className="flex flex-col gap-2.5 py-1">
+                            {[
+                              { label: '전체', value: '전체' },
+                              { label: '매매', value: '매매' },
+                              { label: '전세', value: '전세' },
+                              { label: '월세', value: '월세' },
+                              { label: '단기임대', value: '단기임대' }
+                            ].map((item) => {
+                              const isChecked = selectedTransactions.includes(item.value);
+                              return (
+                                <button
+                                  key={item.value}
+                                  onClick={() => {
+                                    if (item.value === '전체') {
+                                      setSelectedTransactions(['전체']);
+                                      setSelectedTransaction('전체');
+                                    } else {
+                                      let next = selectedTransactions.filter(x => x !== '전체');
+                                      if (isChecked) {
+                                        next = next.filter(x => x !== item.value);
+                                      } else {
+                                        next.push(item.value);
+                                      }
+                                      if (next.length === 0) {
+                                        next = ['전체'];
+                                        setSelectedTransaction('전체');
+                                      } else if (next.length === 1) {
+                                        setSelectedTransaction(next[0] as TransactionType);
+                                      } else {
+                                        setSelectedTransaction('전체');
+                                      }
+                                      setSelectedTransactions(next);
+                                    }
+                                  }}
+                                  className="flex items-center gap-3 text-left w-full hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${
+                                    isChecked 
+                                      ? 'bg-[#03C75A] border-[#03C75A] text-white' 
+                                      : 'border-slate-300 bg-white'
+                                  }`}>
+                                    {isChecked && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                                  </div>
+                                  <span className={`text-[12.5px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-700'}`}>
+                                    {item.label}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          
+                          <div className="border-t pt-2.5 flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                            <span className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">i</span>
+                            <span>중복선택이 가능합니다.</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
-                {/* Price Limit Selector */}
-                <div className="relative shrink-0">
-                  <button
-                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'price' ? null : 'price')}
-                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      priceLimit !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{priceLimit === '전체' ? '가격대' : `${parseInt(priceLimit)/10000}억 이하`}</span>
-                    <span className="text-[8px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeStickyDropdown === 'price' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 가격대', value: '전체' },
-                          { label: '1억 이하', value: '10000' },
-                          { label: '2.5억 이하', value: '25000' },
-                          { label: '4억 이하', value: '40000' },
-                          { label: '6억 이하', value: '60000' },
-                          { label: '10억 이하', value: '100000' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setPriceLimit(opt.value);
-                              setActiveStickyDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
-                              priceLimit === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Size Limit Selector */}
-                <div className="relative shrink-0">
-                  <button
-                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'size' ? null : 'size')}
-                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      sizeRange !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{sizeRange === '전체' ? '면적(평수)' : sizeRange}</span>
-                    <span className="text-[8px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeStickyDropdown === 'size' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 면적', value: '전체' },
-                          { label: '10평대 (10~19평)', value: '10평대' },
-                          { label: '20평대 (20~29평)', value: '20평대' },
-                          { label: '30평대 (30~29평)', value: '30평대' },
-                          { label: '40평대 이상', value: '40평대이상' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setSizeRange(opt.value);
-                              setActiveStickyDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
-                              sizeRange === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Approved Year and Household Selector */}
-                <div className="relative shrink-0">
-                  <button
-                    onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'year' ? null : 'year')}
-                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
-                      useYear !== '전체' || householdCount !== '전체'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{useYear === '전체' ? (householdCount === '전체' ? '연식/단지' : '대단지') : useYear}</span>
-                    <span className="text-[8px] text-slate-400">▼</span>
-                  </button>
-                  <AnimatePresence>
-                    {activeStickyDropdown === 'year' && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className="absolute left-0 top-9 bg-white border border-amber-300/30 rounded-xl shadow-xl z-50 p-1.5 min-w-[140px] flex flex-col gap-0.5"
-                      >
-                        {[
-                          { label: '전체 연식', value: '전체' },
-                          { label: '5년이내 신축', value: '5년이내' },
-                          { label: '10년 이내', value: '10년이내' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setUseYear(opt.value);
-                              setActiveStickyDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
-                              useYear === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                        <div className="h-[1px] bg-slate-100 my-1" />
-                        {[
-                          { label: '전체 세대수', value: '전체' },
-                          { label: '대단지 (1000세대+)', value: '대단지' }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              setHouseholdCount(opt.value);
-                              setActiveStickyDropdown(null);
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
-                              householdCount === opt.value
-                                ? 'bg-amber-100 text-amber-850'
-                                : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Keyword Search Input */}
-                <div className="relative min-w-[155px] sm:min-w-[175px] max-w-[260px] flex-grow">
-                  <input
-                    type="text"
-                    placeholder="단지명, 매물 키워드 검색..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full text-[11px] bg-slate-50 border border-slate-200 hover:border-amber-200 focus:border-amber-400 rounded-xl pl-3 pr-8 py-1.5 text-slate-800 placeholder-slate-400 font-bold focus:outline-none transition-all"
-                  />
-                  {searchQuery ? (
-                    <button 
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-600 focus:outline-none cursor-pointer"
+                  {/* 2. 가격 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'price' ? null : 'price')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (priceMin > 0 || priceMax < 999999 || rentMin > 0 || rentMax < 999999)
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
                     >
-                      <X className="w-3 h-3" />
+                      <span>
+                        {priceMin === 0 && priceMax === 999999 && rentMin === 0 && rentMax === 999999
+                          ? '가격'
+                          : (() => {
+                              const formatPrice = (val: number) => {
+                                if (val >= 10000) {
+                                  const bil = Math.floor(val / 10000);
+                                  const remainder = val % 10000;
+                                  return remainder > 0 ? `${bil}억 ${remainder/1000}천` : `${bil}억`;
+                                }
+                                return `${val/1000}천`;
+                              };
+                              let str = '';
+                              if (selectedTransactions.includes('월세')) {
+                                const minR = rentMin === 0 ? '0' : `${rentMin}만`;
+                                const maxR = rentMax === 999999 ? '무제한' : `${rentMax}만`;
+                                str += `월세 ${minR}~${maxR}`;
+                              } else {
+                                const minP = priceMin === 0 ? '0' : formatPrice(priceMin);
+                                const maxP = priceMax === 999999 ? '무제한' : formatPrice(priceMax);
+                                str += `${minP}~${maxP}`;
+                              }
+                              return str;
+                            })()}
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
                     </button>
-                  ) : (
-                    <Search className="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'price' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-205 rounded-2xl shadow-2xl z-50 p-4 w-[285px] sm:w-[325px] flex flex-col gap-3.5"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-800 truncate">매매가/전세가/보증금/분양가</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-4 py-1 border-b border-dashed border-slate-100">
+                            <button 
+                              onClick={() => setPriceCriterion('property')}
+                              className="flex items-center gap-1.5 text-[11px] font-bold cursor-pointer"
+                            >
+                              <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                priceCriterion === 'property' ? 'border-[#03C75A]' : 'border-slate-350'
+                              }`}>
+                                {priceCriterion === 'property' && <div className="w-2 h-2 rounded-full bg-[#03C75A]" />}
+                              </div>
+                              <span className={priceCriterion === 'property' ? 'text-[#03C75A]' : 'text-slate-500'}>매물가격 기준</span>
+                            </button>
+                            <button 
+                              onClick={() => setPriceCriterion('actual')}
+                              className="flex items-center gap-1.5 text-[11px] font-bold cursor-pointer"
+                            >
+                              <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                priceCriterion === 'actual' ? 'border-[#03C75A]' : 'border-slate-350'
+                              }`}>
+                                {priceCriterion === 'actual' && <div className="w-2 h-2 rounded-full bg-[#03C75A]" />}
+                              </div>
+                              <span className={priceCriterion === 'actual' ? 'text-[#03C75A]' : 'text-slate-500'}>실거래가 기준</span>
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-6 gap-1 bg-slate-50/50 p-1 rounded-xl border border-slate-100">
+                            {[
+                              { label: '5천', val: 5000 },
+                              { label: '6천', val: 6000 },
+                              { label: '7천', val: 7000 },
+                              { label: '8천', val: 8000 },
+                              { label: '9천', val: 9000 },
+                              { label: '1억', val: 10000 },
+                              { label: '2억', val: 20000 },
+                              { label: '3억', val: 30000 },
+                              { label: '4억', val: 40000 },
+                              { label: '5억', val: 50000 },
+                              { label: '6억', val: 60000 },
+                              { label: '7억', val: 70000 },
+                              { label: '8억', val: 80000 },
+                              { label: '9억', val: 90000 },
+                              { label: '10억', val: 100000 },
+                              { label: '11억', val: 110000 },
+                              { label: '12억', val: 120000 },
+                              { label: '13억', val: 130000 },
+                              { label: '14억', val: 140000 },
+                              { label: '15억', val: 150000 },
+                              { label: '16억', val: 160000 },
+                              { label: '17억', val: 170000 },
+                              { label: '18억', val: 180000 },
+                              { label: '18억~', val: 999999 }
+                            ].map((item, idx) => {
+                              const isSelected = priceMax === item.val;
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    if (item.val === 999999) {
+                                      setPriceMin(180000);
+                                      setPriceMax(999999);
+                                    } else {
+                                      setPriceMax(item.val);
+                                      if (priceMin > item.val) setPriceMin(0);
+                                    }
+                                  }}
+                                  className={`py-1 text-[9.5px] rounded border font-bold text-center cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1 text-[11px] font-bold py-1">
+                            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[125px]">
+                              <button 
+                                onClick={() => setPriceMin(Math.max(0, priceMin - 5000))}
+                                className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100"
+                              >
+                                －
+                              </button>
+                              <div className="relative flex items-center w-full min-w-0">
+                                <input 
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="최소"
+                                  value={priceMin === 0 ? '' : priceMin / 10000}
+                                  onChange={(e) => {
+                                    const raw = parseFloat(e.target.value);
+                                    const val = isNaN(raw) ? 0 : Math.round(raw * 10000);
+                                    setPriceMin(Math.min(priceMax, val));
+                                  }}
+                                  className="w-full text-center outline-none bg-white text-slate-700 font-extrabold text-[11px] pr-4 py-1"
+                                />
+                                <span className="absolute right-1 text-[9px] text-slate-400 font-bold pointer-events-none">억</span>
+                              </div>
+                              <button 
+                                onClick={() => setPriceMin(priceMin === 999999 ? 5000 : Math.min(priceMax, priceMin + 5000))}
+                                className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100"
+                              >
+                                ＋
+                              </button>
+                            </div>
+                            <span className="text-slate-400 font-black">~</span>
+                            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[125px]">
+                              <button 
+                                onClick={() => setPriceMax(priceMax === 999999 ? 180000 : Math.max(priceMin, priceMax - 5000))}
+                                className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100"
+                              >
+                                －
+                              </button>
+                              <div className="relative flex items-center w-full min-w-0">
+                                <input 
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="최대"
+                                  value={priceMax === 999999 ? '' : priceMax / 10000}
+                                  onChange={(e) => {
+                                    const raw = parseFloat(e.target.value);
+                                    if (isNaN(raw)) {
+                                      setPriceMax(999999);
+                                    } else {
+                                      setPriceMax(Math.max(priceMin, Math.round(raw * 10000)));
+                                    }
+                                  }}
+                                  className="w-full text-center outline-none bg-white text-slate-700 font-extrabold text-[11px] pr-4 py-1"
+                                />
+                                <span className="absolute right-1 text-[9px] text-slate-400 font-bold pointer-events-none">억</span>
+                              </div>
+                              <button 
+                                onClick={() => setPriceMax(priceMax === 999999 ? 999999 : priceMax + 5000)}
+                                className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100"
+                              >
+                                ＋
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Price Slider Bar ("바" 조절) */}
+                          <div className="flex flex-col gap-1 px-1 py-1.5 bg-slate-50/55 rounded-lg border border-slate-100 mb-2">
+                            <div className="flex justify-between items-center text-[9px] text-slate-400 font-black mb-0.5">
+                              <span>최소: {priceMin === 0 ? '0' : `${priceMin / 10000}억`}</span>
+                              <span>최대: {priceMax === 999999 ? '무제한' : `${priceMax / 10000}억`}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="flex items-center gap-1 flex-grow">
+                                <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최소</span>
+                                <input 
+                                  type="range"
+                                  min="0"
+                                  max="180000"
+                                  step="5000"
+                                  value={priceMin}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setPriceMin(Math.min(priceMax, val));
+                                  }}
+                                  className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1 flex-grow">
+                                <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최대</span>
+                                <input 
+                                  type="range"
+                                  min="0"
+                                  max="180000"
+                                  step="5000"
+                                  value={priceMax === 999999 ? 180000 : priceMax}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setPriceMax(val === 180000 ? 999999 : Math.max(priceMin, val));
+                                  }}
+                                  className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="border-t pt-2.5">
+                            <span className="text-[11.5px] font-black text-slate-800 block mb-1.5">월세 금액</span>
+                            <div className="grid grid-cols-6 gap-1 bg-slate-50/50 p-1 rounded-xl border border-slate-100 mb-2">
+                              {[
+                                { label: '10', val: 10 },
+                                { label: '20', val: 20 },
+                                { label: '30', val: 30 },
+                                { label: '45', val: 45 },
+                                { label: '60', val: 60 },
+                                { label: '70', val: 70 },
+                                { label: '80', val: 80 },
+                                { label: '90', val: 90 },
+                                { label: '1백', val: 100 },
+                                { label: '1.5백', val: 150 },
+                                { label: '2백', val: 200 },
+                                { label: '2백~', val: 999999 }
+                              ].map((item, idx) => {
+                                const isSelected = rentMax === item.val;
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      if (item.val === 999999) {
+                                        setRentMin(200);
+                                        setRentMax(999999);
+                                      } else {
+                                        setRentMax(item.val);
+                                        if (rentMin > item.val) setRentMin(0);
+                                      }
+                                    }}
+                                    className={`py-1 text-[9.5px] rounded border font-bold text-center cursor-pointer transition-all ${
+                                      isSelected
+                                        ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                              {/* Rent Min Input */}
+                              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[130px]">
+                                <button 
+                                  type="button"
+                                  onClick={() => setRentMin(Math.max(0, rentMin - 10))}
+                                  className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  －
+                                </button>
+                                <div className="relative flex items-center w-full min-w-0">
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    placeholder="0"
+                                    value={rentMin === 0 ? '' : rentMin}
+                                    onChange={(e) => {
+                                      const val = Math.min(rentMax, Number(e.target.value));
+                                      setRentMin(isNaN(val) ? 0 : val);
+                                    }}
+                                    className="w-full text-center outline-none bg-white text-slate-700 font-extrabold pr-4 py-1 text-[11px]"
+                                  />
+                                  <span className="absolute right-1 text-[9px] text-slate-400 font-bold pointer-events-none">만</span>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => setRentMin(Math.min(rentMax, rentMin + 10))}
+                                  className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  ＋
+                                </button>
+                              </div>
+                              <span className="text-slate-400 font-black">~</span>
+                              {/* Rent Max Input */}
+                              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[130px]">
+                                <button 
+                                  type="button"
+                                  onClick={() => setRentMax(rentMax === 999999 ? 200 : Math.max(rentMin, rentMax - 10))}
+                                  className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  －
+                                </button>
+                                <div className="relative flex items-center w-full min-w-0">
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    placeholder="최대"
+                                    value={rentMax === 999999 ? '' : rentMax}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      if (!val || isNaN(val)) {
+                                        setRentMax(999999);
+                                      } else {
+                                        setRentMax(Math.max(rentMin, val));
+                                      }
+                                    }}
+                                    className="w-full text-center outline-none bg-white text-slate-700 font-extrabold pr-4 py-1 text-[11px]"
+                                  />
+                                  <span className="absolute right-1 text-[9px] text-slate-400 font-bold pointer-events-none">만</span>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => setRentMax(rentMax === 999999 ? 999999 : rentMax + 10)}
+                                  className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  ＋
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Monthly Rent Slider Bar ("바" 조절) */}
+                            <div className="flex flex-col gap-1 px-1 py-1.5 mt-2 bg-slate-50/50 rounded-lg border border-slate-100">
+                              <div className="flex justify-between items-center text-[9px] text-slate-400 font-black mb-0.5">
+                                <span>최소: {rentMin === 0 ? '0' : `${rentMin}만`}</span>
+                                <span>최대: {rentMax === 999999 ? '무제한' : `${rentMax}만`}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <div className="flex items-center gap-1 flex-grow">
+                                  <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최소</span>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max="200"
+                                    step="5"
+                                    value={rentMin}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setRentMin(Math.min(rentMax, val));
+                                    }}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1 flex-grow">
+                                  <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최대</span>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max="200"
+                                    step="5"
+                                    value={rentMax === 999999 ? 200 : rentMax}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setRentMax(val === 200 ? 999999 : Math.max(rentMin, val));
+                                    }}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end border-t pt-2 mt-1">
+                            <button
+                              onClick={() => {
+                                setPriceMin(0);
+                                setPriceMax(999999);
+                                setRentMin(0);
+                                setRentMax(999999);
+                                setPriceLimit('전체');
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-[11px] font-black text-slate-700 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3 text-slate-500" />
+                              <span>조건삭제</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 3. 면적 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'size' ? null : 'size')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (areaMin > 0 || areaMax < 999999)
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>
+                        {areaMin === 0 && areaMax === 999999
+                          ? '면적'
+                          : `${areaMin}~${areaMax === 999999 ? '무제한' : areaMax}${areaUnit === 'pyong' ? '평' : '㎡'}`}
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'size' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[320px] flex flex-col gap-3"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <div className="flex items-center gap-3">
+                              <span className="font-extrabold text-[12.5px] text-slate-800">면적</span>
+                              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 shrink-0">
+                                <button 
+                                  onClick={() => setAreaUnit('m2')}
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    areaUnit === 'm2'
+                                      ? 'bg-white border text-slate-900 border-slate-200 shadow-3xs'
+                                      : 'text-slate-400 hover:text-slate-700'
+                                  }`}
+                                >
+                                  ㎡
+                                </button>
+                                <button 
+                                  onClick={() => setAreaUnit('pyong')}
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    areaUnit === 'pyong'
+                                      ? 'bg-white border text-slate-900 border-slate-200 shadow-3xs'
+                                      : 'text-slate-400 hover:text-slate-700'
+                                  }`}
+                                >
+                                  평
+                                </button>
+                              </div>
+                            </div>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="py-1.5 flex flex-col gap-0.5 text-center">
+                            <span className="text-[#03C75A] font-extrabold text-xs">
+                              {areaMin === 0 && areaMax === 999999
+                                ? '전체 면적'
+                                : `${areaMin}~${areaMax === 999999 ? '무제한' : areaMax}${areaUnit === 'pyong' ? '평' : '㎡'}`}
+                            </span>
+                            <div className="relative h-6 flex items-center justify-center my-1 px-2.5">
+                              <div className="absolute w-full h-[3px] bg-slate-100 rounded" />
+                              <div className="absolute left-[15%] right-[20%] h-[3px] bg-[#03C75A] rounded" />
+                              <div className="absolute left-[15%] w-3 h-3 bg-white border-2 border-[#03C75A] rounded-full shadow-xs" />
+                              <div className="absolute right-[20%] w-3 h-3 bg-white border-2 border-[#03C75A] rounded-full shadow-xs" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { label: areaUnit === 'pyong' ? '~10평' : '~33㎡', min: 0, max: 10 },
+                              { label: areaUnit === 'pyong' ? '10평대' : '33~66㎡', min: 10, max: 20 },
+                              { label: areaUnit === 'pyong' ? '20평대' : '66~99㎡', min: 20, max: 30 },
+                              { label: areaUnit === 'pyong' ? '30평대' : '99~132㎡', min: 30, max: 40 },
+                              { label: areaUnit === 'pyong' ? '40평대' : '132~165㎡', min: 40, max: 50 },
+                              { label: areaUnit === 'pyong' ? '50평대' : '165~198㎡', min: 50, max: 60 },
+                              { label: areaUnit === 'pyong' ? '60평대' : '198~231㎡', min: 60, max: 70 },
+                              { label: areaUnit === 'pyong' ? '70평~' : '231㎡~', min: 70, max: 999999 }
+                            ].map((item, idx) => {
+                              const isSelected = areaMin === item.min && areaMax === item.max;
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    setAreaMin(item.min);
+                                    setAreaMax(item.max);
+                                    if (areaUnit === 'pyong') {
+                                      if (item.min === 10) setSizeRange('10평대');
+                                      else if (item.min === 20) setSizeRange('20평대');
+                                      else if (item.min === 30) setSizeRange('30평대');
+                                      else if (item.min === 40) setSizeRange('40평대이상');
+                                      else setSizeRange('전체');
+                                    }
+                                  }}
+                                  className={`py-1.5 text-[10px] rounded-lg border font-bold text-center cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Direct Input for Size (면적) */}
+                          <div className="flex flex-col gap-2 border-t pt-2.5">
+                            <span className="text-[11.5px] font-black text-slate-800 block">직접 입력 ({areaUnit === 'pyong' ? '평' : '㎡'})</span>
+                            <div className="flex items-center justify-between gap-1 text-[11px] font-bold py-1">
+                              {/* Area Min Input */}
+                              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[150px]">
+                                <button 
+                                  type="button"
+                                  onClick={() => setAreaMin(Math.max(0, areaMin - 5))}
+                                  className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  －
+                                </button>
+                                <div className="relative flex items-center w-full min-w-0">
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    placeholder="최소"
+                                    value={areaMin === 0 ? '' : areaMin}
+                                    onChange={(e) => {
+                                      const val = Math.min(areaMax, Number(e.target.value));
+                                      setAreaMin(isNaN(val) ? 0 : val);
+                                    }}
+                                    className="w-full text-center outline-none bg-white text-slate-700 font-extrabold pr-4.5 pl-0.5 py-1 text-[11.5px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
+                                  <span className="absolute right-0.5 text-[9px] text-slate-400 font-bold pointer-events-none">{areaUnit === 'pyong' ? '평' : '㎡'}</span>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => setAreaMin(areaMin === 999999 ? 5 : Math.min(areaMax, areaMin + 5))}
+                                  className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  ＋
+                                </button>
+                              </div>
+                              <span className="text-slate-400 font-black">~</span>
+                              {/* Area Max Input */}
+                              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden flex-1 max-w-[150px]">
+                                <button 
+                                  type="button"
+                                  onClick={() => setAreaMax(areaMax === 999999 ? 120 : Math.max(areaMin, areaMax - 5))}
+                                  className="px-2 py-1 bg-slate-50 border-r text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  －
+                                </button>
+                                <div className="relative flex items-center w-full min-w-0">
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    placeholder="최대"
+                                    value={areaMax === 999999 ? '' : areaMax}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      if (!val || isNaN(val)) {
+                                        setAreaMax(999999);
+                                      } else {
+                                        setAreaMax(Math.max(areaMin, val));
+                                      }
+                                    }}
+                                    className="w-full text-center outline-none bg-white text-slate-700 font-extrabold pr-4.5 pl-0.5 py-1 text-[11.5px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
+                                  <span className="absolute right-0.5 text-[9px] text-slate-400 font-bold pointer-events-none">{areaUnit === 'pyong' ? '평' : '㎡'}</span>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => setAreaMax(areaMax === 999999 ? 999999 : areaMax + 5)}
+                                  className="px-2 py-1 bg-slate-50 border-l text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer text-xs"
+                                >
+                                  ＋
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Size Slider Bar ("바" 조절) */}
+                            <div className="flex flex-col gap-1 px-1 py-1.5 bg-slate-50/50 rounded-lg border border-slate-100 mt-1">
+                              <div className="flex justify-between items-center text-[9px] text-slate-400 font-black mb-0.5">
+                                <span>최소: {areaMin === 0 ? '0' : `${areaMin}${areaUnit === 'pyong' ? '평' : '㎡'}`}</span>
+                                <span>최대: {areaMax === 999999 ? '무제한' : `${areaMax}${areaUnit === 'pyong' ? '평' : '㎡'}`}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <div className="flex items-center gap-1 flex-grow">
+                                  <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최소</span>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max={areaUnit === 'pyong' ? '120' : '400'}
+                                    step="5"
+                                    value={areaMin}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setAreaMin(Math.min(areaMax, val));
+                                    }}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1 flex-grow">
+                                  <span className="text-[8.5px] font-bold text-slate-400 shrink-0">최대</span>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max={areaUnit === 'pyong' ? '120' : '400'}
+                                    step="5"
+                                    value={areaMax === 999999 ? (areaUnit === 'pyong' ? 120 : 400) : areaMax}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      const maxLimit = areaUnit === 'pyong' ? 120 : 400;
+                                      setAreaMax(val === maxLimit ? 999999 : Math.max(areaMin, val));
+                                    }}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-[#03C75A]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end border-t pt-2">
+                            <button
+                              onClick={() => {
+                                setAreaMin(0);
+                                setAreaMax(999999);
+                                setSizeRange('전체');
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-[11px] font-black text-slate-700 cursor-pointer animate-none"
+                            >
+                              <RefreshCw className="w-3 h-3 text-slate-500" />
+                              <span>조건삭제</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 4. 방/욕실 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'rooms' ? null : 'rooms')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (filterRooms !== '전체' || filterBathrooms !== '전체')
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>
+                        {filterRooms === '전체' && filterBathrooms === '전체'
+                          ? '방/욕실'
+                          : filterRooms !== '전체' && filterBathrooms !== '전체'
+                            ? `방 ${filterRooms}, 욕실 ${filterBathrooms}`
+                            : filterRooms !== '전체'
+                              ? `방 ${filterRooms}`
+                              : `욕실 ${filterBathrooms}`}
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'rooms' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[210px] flex flex-col gap-3.5"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-800">방수(룸)</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            {['전체', '1개', '2개', '3개', '4개 이상'].map((item) => {
+                              const cleanVal = item === '전체' ? '전체' : item.includes('이상') ? '4개 이상' : item.replace('개', '');
+                              const isChecked = filterRooms === cleanVal;
+                              return (
+                                <button
+                                  key={item}
+                                  onClick={() => setFilterRooms(cleanVal)}
+                                  className="flex items-center gap-2.5 text-left w-full hover:bg-slate-50 p-1 rounded-lg cursor-pointer"
+                                >
+                                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                    isChecked ? 'border-[#03C75A]' : 'border-slate-300'
+                                  }`}>
+                                    {isChecked && <div className="w-2.5 h-2.5 rounded-full bg-[#03C75A]" />}
+                                  </div>
+                                  <span className={`text-[12px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-600'}`}>{item}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="border-t pt-2.5">
+                            <span className="font-extrabold text-[12.5px] text-slate-800 block mb-2">욕실수</span>
+                            <div className="flex flex-col gap-2">
+                              {['전체', '1개', '2개', '3개', '4개 이상'].map((item) => {
+                                const cleanVal = item === '전체' ? '전체' : item.includes('이상') ? '4개 이상' : item.replace('개', '');
+                                const isChecked = filterBathrooms === cleanVal;
+                                return (
+                                  <button
+                                    key={item}
+                                    onClick={() => setFilterBathrooms(cleanVal)}
+                                    className="flex items-center gap-2.5 text-left w-full hover:bg-slate-50 p-1 rounded-lg cursor-pointer"
+                                  >
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                      isChecked ? 'border-[#03C75A]' : 'border-slate-300'
+                                    }`}>
+                                      {isChecked && <div className="w-2.5 h-2.5 rounded-full bg-[#03C75A]" />}
+                                    </div>
+                                    <span className={`text-[12px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-600'}`}>{item}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 5. 층수 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'floor' ? null : 'floor')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        filterFloor !== '전체'
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{filterFloor === '전체' ? '층수' : filterFloor}</span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'floor' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[190px] flex flex-col gap-3"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-800">층수 선택</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            {['전체', '1층', '지하층', '지상층(1층제외)'].map((item) => {
+                              const isChecked = filterFloor === item;
+                              return (
+                                <button
+                                  key={item}
+                                  onClick={() => setFilterFloor(item)}
+                                  className="flex items-center gap-2.5 text-left w-full hover:bg-slate-550 p-1.5 rounded-lg cursor-pointer"
+                                >
+                                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                    isChecked ? 'border-[#03C75A]' : 'border-slate-300'
+                                  }`}>
+                                    {isChecked && <div className="w-2.5 h-2.5 rounded-full bg-[#03C75A]" />}
+                                  </div>
+                                  <span className={`text-[12.5px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-600'}`}>{item}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 6. 사용승인일 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'year' ? null : 'year')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        filterUseYear !== '전체'
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{filterUseYear === '전체' ? '사용승인일' : filterUseYear === '입주예정' ? '입주예정' : `${filterUseYear}이내`}</span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'year' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[270px] flex flex-col gap-3"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-800">사용승인일</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="py-1 flex flex-col gap-0.5 text-center">
+                            <span className="text-[#03C75A] font-extrabold text-xs">
+                              {filterUseYear === '전체' ? '전체 연식' : (filterUseYear === '입주예정' ? '입주예정' : `${filterUseYear} 이내 준공`)}
+                            </span>
+                            <div className="relative h-6 flex items-center justify-center my-1 px-1">
+                              <div className="absolute w-full h-[3px] bg-slate-100 rounded" />
+                              <div className="absolute left-0 right-[40%] h-[3px] bg-[#03C75A] rounded" />
+                              <div className="absolute left-0 w-3 h-3 bg-white border-2 border-[#03C75A] rounded-full shadow-xs" />
+                              <div className="absolute right-[40%] w-3 h-3 bg-white border-2 border-[#03C75A] rounded-full shadow-xs" />
+                            </div>
+                          </div>
+
+                          <span className="text-[9.5px] text-slate-400 font-bold block mt-1">간편 연식 선택</span>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { label: '입주예정', value: '입주예정' },
+                              { label: '2년 이내', value: '2년' },
+                              { label: '4년 이내', value: '4년' },
+                              { label: '10년 이내', value: '10년' },
+                              { label: '15년 이내', value: '15년' },
+                              { label: '20년 이내', value: '20년' },
+                              { label: '25년 이내', value: '25년' },
+                              { label: '30년 이내', value: '30년' }
+                            ].map((item) => {
+                              const isSelected = filterUseYear === item.value;
+                              return (
+                                <button
+                                  key={item.value}
+                                  onClick={() => {
+                                    setFilterUseYear(item.value);
+                                    if (item.value === '2년' || item.value === '4년') setUseYear('5년이내');
+                                    else if (item.value === '10년') setUseYear('10년이내');
+                                    else if (item.value === '15년') setUseYear('15년이내');
+                                    else setUseYear('전체');
+                                  }}
+                                  className={`py-1.5 text-[10px] rounded border font-bold text-center cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex justify-end border-t pt-2">
+                            <button
+                              onClick={() => {
+                                setFilterUseYear('전체');
+                                setUseYear('전체');
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-[11px] font-black text-slate-700 cursor-pointer animate-none"
+                            >
+                              <RefreshCw className="w-3 h-3 text-slate-500" />
+                              <span>조건삭제</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 7. 방향 Selector */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActiveStickyDropdown(activeStickyDropdown === 'direction' ? null : 'direction')}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (!filterDirections.includes('전체') && filterDirections.length > 0)
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>
+                        {filterDirections.includes('전체') || filterDirections.length === 0
+                          ? '방향'
+                          : filterDirections.join(', ')}
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {activeStickyDropdown === 'direction' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-4 min-w-[200px] flex flex-col gap-3"
+                        >
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-800">방향 선택</span>
+                            <button onClick={() => setActiveStickyDropdown(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex flex-col gap-2 py-1">
+                            {[
+                              { label: '전체', value: '전체' },
+                              { label: '동향 (동)', value: '동' },
+                              { label: '남동향 (남동)', value: '남동' },
+                              { label: '서향 (서)', value: '서' },
+                              { label: '남서향 (남서)', value: '남서' },
+                              { label: '남향 (남)', value: '남' },
+                              { label: '북동향 (북동)', value: '북동' },
+                              { label: '북향 (북)', value: '북' },
+                              { label: '북서향 (북서)', value: '북서' }
+                            ].map((item) => {
+                              const isChecked = filterDirections.includes(item.value);
+                              return (
+                                <button
+                                  key={item.value}
+                                  onClick={() => {
+                                    if (item.value === '전체') {
+                                      setFilterDirections(['전체']);
+                                    } else {
+                                      let next = filterDirections.filter(x => x !== '전체');
+                                      if (isChecked) {
+                                        next = next.filter(x => x !== item.value);
+                                      } else {
+                                        next.push(item.value);
+                                      }
+                                      if (next.length === 0) {
+                                        next = ['전체'];
+                                      }
+                                      setFilterDirections(next);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2.5 text-left w-full hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <div className={`w-4.5 h-4.5 rounded flex items-center justify-center border transition-all ${
+                                    isChecked 
+                                      ? 'bg-[#03C75A] border-[#03C75A] text-white' 
+                                      : 'border-slate-350 bg-white'
+                                  }`}>
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3px]" />}
+                                  </div>
+                                  <span className={`text-[12px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-700'}`}>
+                                    {item.label}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                </div>
+
+                {/* Right block: Keyword Search Input and Resets */}
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+                  {/* Keyword Search Input */}
+                  <div className="relative max-w-[280px] flex-grow sm:flex-grow-0 sm:min-w-[180px]">
+                    <input
+                      type="text"
+                      placeholder="단지명, 매물 키워드 검색..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setViewMode('grid');
+                          setTimeout(() => {
+                            const el = document.getElementById('filter-station');
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 100);
+                        }
+                      }}
+                      className="w-full text-[11px] bg-slate-50 border border-slate-200 hover:border-amber-200 focus:border-amber-400 rounded-xl pl-3 pr-8 py-1.5 text-slate-800 placeholder-slate-400 font-bold focus:outline-none transition-all"
+                    />
+                    {searchQuery ? (
+                      <button 
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650 focus:outline-none cursor-pointer"
+                        type="button"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewMode('grid');
+                          setTimeout(() => {
+                            const el = document.getElementById('filter-station');
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 100);
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-500 cursor-pointer focus:outline-none flex items-center justify-center p-0.5"
+                      >
+                        <Search className="w-3 h-3 text-slate-400 hover:text-amber-500" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Reset filter button */}
+                  {(
+                    selectedCategory !== '전체' ||
+                    selectedTransaction !== '전체' ||
+                    priceLimit !== '전체' ||
+                    sizeRange !== '전체' ||
+                    useYear !== '전체' ||
+                    householdCount !== '전체' ||
+                    searchQuery !== '' ||
+                    (selectedTransactions.length > 0 && !selectedTransactions.includes('전체')) ||
+                    priceMin > 0 || priceMax < 999999 ||
+                    rentMin > 0 || rentMax < 999999 ||
+                    areaMin > 0 || areaMax < 999999 ||
+                    filterRooms !== '전체' ||
+                    filterBathrooms !== '전체' ||
+                    filterFloor !== '전체' ||
+                    filterUseYear !== '전체' ||
+                    (filterDirections.length > 0 && !filterDirections.includes('전체'))
+                  ) && (
+                    <button
+                      onClick={() => {
+                        setSelectedCategory('전체');
+                        setActiveSubPills(['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지']);
+                        setSelectedTransaction('전체');
+                        setPriceLimit('전체');
+                        setSizeRange('전체');
+                        setUseYear('전체');
+                        setHouseholdCount('전체');
+                        setSearchQuery('');
+                        // Reset Naver Real Estate style filters
+                        setSelectedTransactions(['전체']);
+                        setPriceMin(0);
+                        setPriceMax(999999);
+                        setRentMin(0);
+                        setRentMax(999999);
+                        setAreaMin(0);
+                        setAreaMax(999999);
+                        setFilterRooms('전체');
+                        setFilterBathrooms('전체');
+                        setFilterFloor('전체');
+                        setFilterUseYear('전체');
+                        setFilterDirections(['전체']);
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin-slow" />
+                      <span>필터 초기화</span>
+                    </button>
                   )}
                 </div>
               </div>
-
-              {/* Reset filter button */}
-              {(selectedCategory !== '전체' || selectedTransaction !== '전체' || priceLimit !== '전체' || sizeRange !== '전체' || useYear !== '전체' || householdCount !== '전체' || searchQuery !== '') && (
-                <button
-                  onClick={() => {
-                    setSelectedCategory('전체');
-                    setActiveSubPills(['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지']);
-                    setSelectedTransaction('전체');
-                    setPriceLimit('전체');
-                    setSizeRange('전체');
-                    setUseYear('전체');
-                    setHouseholdCount('전체');
-                    setSearchQuery('');
-                  }}
-                  className="px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer shrink-0"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin-slow" />
-                  <span>필터 초기화</span>
-                </button>
-              )}
-            </div>
           </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          PROPERTIES GRID / LIST WRAPPER
+          ========================================== */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
           {/* Properties Listings Grid (full width) */}
           <div className="w-full flex flex-col gap-6" id="listings-container">
@@ -3208,18 +4312,6 @@ export default function App() {
                 >
                   <MapIcon className="w-3.5 h-3.5 text-amber-500" />
                   <span>지도 분할형 보기</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('openlist')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 transition-all cursor-pointer ${
-                    viewMode === 'openlist'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <ListCollapse className="w-3.5 h-3.5 text-slate-950" />
-                  <span>🏢 오픈리스트 B2B 전산망</span>
                 </button>
               </div>
             </div>
@@ -3817,56 +4909,7 @@ export default function App() {
 
                 {/* Left Interactive Kakao Map Panel (lg:col-span-9, order-1) */}
                 <div className="order-1 lg:order-1 lg:col-span-9 h-[380px] lg:h-[580px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
-                  {/* Map Header Diagnostics & Controls */}
-                  <div className="absolute top-3 left-3 right-4 z-30 flex flex-wrap gap-2 items-center justify-between pointer-events-none">
-                    {/* Left: Troubleshooting Button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowKakaoGuide(!showKakaoGuide)}
-                      className="pointer-events-auto bg-slate-900/90 hover:bg-slate-950 backdrop-blur-md text-white text-[10px] sm:text-xs font-black px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-                    >
-                      <span>🛠️ 지도 구성 / 도메인 가이드</span>
-                    </button>
 
-                    {/* Right: Modern High-Contrast Engine Selector Tab & Forced Re-render key */}
-                    <div className="pointer-events-auto bg-slate-950/90 backdrop-blur-md px-1.5 py-1.5 rounded-xl shadow-lg border border-white/10 flex items-center gap-1">
-                      <div className="px-2.5 py-1 text-[10px] font-black text-amber-400 flex items-center gap-1.5 border-r border-slate-800 mr-1 select-none">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse animate-duration-1000"></span>
-                        <span>🛰️ 카카오 ROADMAP 전산맵</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMapKey(prev => prev + 1);
-                          // Create high-visibility notice to make it completely explicit
-                          const btn = document.getElementById('map-refresh-alert');
-                          if (btn) {
-                            btn.classList.remove('opacity-0');
-                            btn.classList.add('opacity-100');
-                            setTimeout(() => {
-                              btn.classList.remove('opacity-100');
-                              btn.classList.add('opacity-0');
-                            }, 1500);
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
-                        title="지도 컴포넌트를 강제 리마운트 및 리렌더 처리하여 캐시 문제를 즉시 방지합니다."
-                      >
-                        <span>⚡ 캐시 리마운트</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Cache Reset Flash Alert popup inside map */}
-                  <div id="map-refresh-alert" className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-amber-500 text-slate-950 font-black text-xs py-1.5 px-3 rounded-full shadow-md border border-amber-400 opacity-0 transition-opacity duration-300 pointer-events-none select-none">
-                    🔄 카카오 지도 가상 캐시 초기화 및 강제 리렌더링 진행 완료! (Key: {mapKey + 1})
-                  </div>
-
-                  {/* Diagnostic Mini Badge (sitting beautifully on middle-right side of map screen) */}
-                  <div className="absolute top-16 right-3 z-30 bg-slate-950/90 text-white text-[9px] p-2 rounded-lg font-mono shadow-md border border-white/10 flex flex-col gap-0.5 select-all text-left max-w-[150px] leading-relaxed opacity-75 hover:opacity-100 transition-opacity">
-                    <div>⚙️ 활성: <span className="text-amber-400 font-bold">카카오 ROADMAP</span></div>
-                    <div>📋 매물: <span className="text-amber-400 font-bold">{filteredProperties.length}개</span></div>
-                  </div>
 
                   {/* Troubleshooting Guide Box overlay when requested */}
                   <AnimatePresence>
@@ -4247,15 +5290,11 @@ export default function App() {
                     </div>
                   )}
                   
-                  {/* Floating map controls instruction overlay */}
-                  <div className="absolute bottom-4 right-4 bg-slate-900/90 backdrop-blur-md text-white px-3 py-2 rounded-xl border border-slate-700/50 text-[10px] font-semibold flex items-center gap-1.5 z-10 shadow-md">
-                    <Navigation className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                    <span>핀 클릭: 매물 지정 | 더블 클릭: 상세 정보 카드 열기</span>
-                  </div>
+
                 </div>
 
               </div>
-            ) : viewMode === 'openlist' ? (
+            ) : false ? (
               /* Collaborative B2B OpenList Spreadsheet and Ledger Layout */
               <div className="flex flex-col gap-5 text-left">
                 
@@ -4762,7 +5801,6 @@ export default function App() {
           </div>
 
         </div> {/* Close w-full flex flex-col gap-6 Wrapper */}
-    </main>
 
       {/* ==========================================
           OFFLINE DIRECTIONS & MAP PLOT SECTION
@@ -5220,6 +6258,86 @@ export default function App() {
                   삭제하기
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==========================================
+          CUSTOM LOGIN MODAL (Iframe Safe React Modal)
+          ========================================== */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl border border-amber-200 z-[10000] p-6 flex flex-col gap-4"
+            >
+              <div className="text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 mb-2">
+                  <Lock className="w-5 h-5 animate-pulse" />
+                </div>
+                <h3 className="text-base font-black text-slate-900 mb-1">대표 로그인</h3>
+                <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
+                  중개업소 전용 시스템 접속을 위해 인증 정보를 입력해주세요.
+                </p>
+              </div>
+
+              <form onSubmit={handleLoginSubmit} className="flex flex-col gap-3 mt-1">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 mb-1">아이디 (ID)</label>
+                  <input
+                    type="text"
+                    required
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    placeholder="아이디를 입력하세요"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white text-slate-800"
+                    id="login-id-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 mb-1">비밀번호 (PASSWORD)</label>
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="비밀번호를 입력하세요"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white text-slate-800"
+                    id="login-password-input"
+                  />
+                </div>
+
+                <div className="flex gap-2 font-bold text-xs mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginModal(false)}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl cursor-pointer transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-2.5 rounded-xl cursor-pointer transition-colors font-black"
+                  >
+                    로그인
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

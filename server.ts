@@ -3,6 +3,8 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -372,6 +374,127 @@ app.post("/api/properties", async (req, res) => {
       error: err?.message || "Internal server error during property insertion."
     });
   }
+});
+
+// Sends real-time Email alerts to lsm4042@naver.com and junku97@naver.com upon new consultation submissions
+app.post("/api/inquiry", async (req, res) => {
+  const { clientName, clientPhone, message, propertyName, date } = req.body;
+  console.log("📨 Received new inquiry at Express backend:", { clientName, clientPhone, propertyName });
+
+  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw768QQ_9in5Cr8sUQFtboMBH8spv3ORmRL7tB-rerfkHINBgd6nVp2ru90kM6sJNFYpw/exec';
+  let spreadSheetSaved = false;
+
+  // 1. Send asynchronous sync to default spreadsheet GAS Webhook
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientName,
+        clientPhone,
+        message,
+        propertyName,
+        date
+      })
+    });
+    spreadSheetSaved = true;
+    console.log("✅ Inquiry successfully synced with spreadsheet: Status", response.status);
+  } catch (err) {
+    console.error("❌ Google spreadsheet post failed, continuing with Email dispatch:", err);
+  }
+
+  // 2. Formulate email notification content
+  const emailSubject = `🔔 [부강부동산] 새로운 실시간 상담/매물접수 알림 (${clientName} 고객님)`;
+  
+  const formattedDate = date || new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  const emailHtml = `
+    <div style="font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 24px; text-align: center; color: #ffffff;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.5px;">🏢 부강부동산 실시간 알림</h1>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: rgba(255, 255, 255, 0.9);">새로운 온라인 상담 및 매물이 접수되었습니다.</p>
+      </div>
+      <div style="padding: 24px; background-color: #ffffff; color: #334155;">
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: bold; width: 30%; color: #64748b;">접수 일시</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${formattedDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">고객 성함</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #1e293b; font-size: 15px;">${clientName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">연락처</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #4338ca; font-weight: bold; font-size: 15px;">
+              <a href="tel:${clientPhone}" style="color: #4338ca; text-decoration: none;">${clientPhone}</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">관련 매물/유형</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-weight: bold;">${propertyName || '일반 상담'}</td>
+          </tr>
+        </table>
+        
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0; margin-top: 15px;">
+          <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #475569; font-weight: bold;">📋 상담/접수 내용</h4>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #334155;">${message || '입력된 내용이 없습니다.'}</p>
+        </div>
+      </div>
+      <div style="background-color: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+        본 메일은 부강부동산 홈페이지 실시간 온라인 상담 연동 시스템을 통해 자동 발송되었습니다.
+      </div>
+    </div>
+  `;
+
+  let emailSent = false;
+  let emailError = null;
+
+  // Read SMTP settings from environment variables
+  const smtpHost = process.env.SMTP_HOST || 'smtp.naver.com';
+  const smtpPort = parseInt(process.env.SMTP_PORT || '465');
+  const smtpSecure = process.env.SMTP_SECURE !== 'false'; // default is true (perfect for port 465 SSL)
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const emailSender = process.env.EMAIL_SENDER || smtpUser;
+
+  if (smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      });
+
+      const mailOptions = {
+        from: `부강부동산 알리미 <${emailSender}>`,
+        to: "lsm4042@naver.com, junku97@naver.com",
+        subject: emailSubject,
+        html: emailHtml
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("📨 Email sent successfully to lsm4042@naver.com, junku97@naver.com:", info.messageId);
+      emailSent = true;
+    } catch (err: any) {
+      console.error("❌ Failed to send notification email via Nodemailer:", err);
+      emailError = err?.message || String(err);
+    }
+  } else {
+    console.warn("⚠️ SMTP credentials (SMTP_USER/SMTP_PASS) are missing in environment context.");
+    emailError = "SMTP 설정(SMTP_USER 및 SMTP_PASS)이 등록되어 있지 않습니다.";
+  }
+
+  return res.json({
+    success: true,
+    spreadSheetSaved,
+    emailSent,
+    emailError,
+    recipients: ["lsm4042@naver.com", "junku97@naver.com"]
+  });
 });
 
 app.get("/api/health", (req, res) => {
