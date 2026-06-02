@@ -530,6 +530,97 @@ export default function App() {
   
   // Naver Real Estate style Map Split View Mode States
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('map');
+  
+  // Region Selector states matching user's custom images
+  const [selectedSido, setSelectedSido] = useState<string>('부산시');
+  const [selectedSigungu, setSelectedSigungu] = useState<string>('부산진구');
+  const [selectedEupmyeondong, setSelectedEupmyeondong] = useState<string>('가야동');
+  const [activeRegionStep, setActiveRegionStep] = useState<'sido' | 'sigungu' | 'dong'>('sido');
+  const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState<boolean>(false);
+
+  // Region static lists and geocode helpers
+  const getSigunguOptions = (sidoName: string) => {
+    const SIGUNGU_OPTIONS_MAP: { [key: string]: string[] } = {
+      '부산시': ['부산진구', '해운대구', '수영구', '연제구', '동래구', '금정구', '남구', '북구', '사하구', '사상구', '강서구', '중구', '서구', '동구', '영도구', '기장군'],
+      '서울시': ['강남구', '서초구', '송파구', '마포구', '용산구', '성동구', '영등포구', '강서구', '종로구', '중구', '성북구', '서대문구', '노원구'],
+      '경기도': ['성남시 분당구', '수원시 팔달구', '수원시 영통구', '용인시 수지구', '용인시 기흥구', '고양시 일산서구', '고양시 일산동구', '부천시', '남양주시', '화성시', '안산시', '평택시'],
+      '인천시': ['연수구(송도)', '남동구', '미추홀구', '서구', '부평구', '계양구', '중구', '강화군'],
+      '대전시': ['유성구', '서구', '중구', '동구', '대덕구'],
+      '대구시': ['수성구', '달서구', '중구', '북구', '동구', '서구', '남구', '달성군'],
+      '울산시': ['남구', '중구', '북구', '동구', '울주군'],
+      '광주시': ['서구', '남구', '동구', '북구', '광산구'],
+    };
+    const list = SIGUNGU_OPTIONS_MAP[sidoName] || [];
+    const parsed = new Set<string>(list);
+
+    const matchesSido = (addr: string, s: string) => {
+      const cleanAddr = addr.replace(/\s+/g, '');
+      if (s.startsWith('서울')) return cleanAddr.includes('서울');
+      if (s.startsWith('부산')) return cleanAddr.includes('부산');
+      if (s.startsWith('인천')) return cleanAddr.includes('인천');
+      if (s.startsWith('대전')) return cleanAddr.includes('대전');
+      if (s.startsWith('대구')) return cleanAddr.includes('대구');
+      if (s.startsWith('울산')) return cleanAddr.includes('울산');
+      if (s.startsWith('세종')) return cleanAddr.includes('세종');
+      if (s.startsWith('광주')) return cleanAddr.includes('광주');
+      if (s.startsWith('경기')) return cleanAddr.includes('경기');
+      if (s.startsWith('강원')) return cleanAddr.includes('강원');
+      if (s.includes('충북') || s.includes('충청북도')) return cleanAddr.includes('충북') || cleanAddr.includes('충청북도');
+      if (s.includes('충남') || s.includes('충청남도')) return cleanAddr.includes('충남') || cleanAddr.includes('충청남도');
+      if (s.includes('경북') || s.includes('경상북도')) return cleanAddr.includes('경북') || cleanAddr.includes('경상북도');
+      if (s.includes('경남') || s.includes('경상남도')) return cleanAddr.includes('경남') || cleanAddr.includes('경상남도');
+      if (s.includes('전북') || s.includes('전라북')) return cleanAddr.includes('전북') || cleanAddr.includes('전라북도');
+      if (s.includes('전남') || s.includes('전라남')) return cleanAddr.includes('전남') || cleanAddr.includes('전라남도');
+      if (s.startsWith('제주')) return cleanAddr.includes('제주');
+      return cleanAddr.includes(s.substring(0, 2));
+    };
+
+    properties.forEach(p => {
+      const addr = (p.location || p.fullAddr || '').trim();
+      const parts = addr.split(/\s+/);
+      if (parts.length > 1) {
+        const propSido = parts[0];
+        const propSigungu = parts[1];
+        if (matchesSido(propSido, sidoName)) {
+          parsed.add(propSigungu);
+        }
+      }
+    });
+
+    return Array.from(parsed);
+  };
+
+  const getDongOptions = (sigunguName: string) => {
+    const DONG_OPTIONS_MAP: { [key: string]: string[] } = {
+      '부산진구': ['가야동', '개금동', '당감동', '전포동', '범천동', '양정동', '부암동', '부전동', '초읍동', '연지동'],
+      '해운대구': ['우동', '중동', '좌동', '반여동', '반송동', '재송동', '송정동'],
+      '수영구': ['광안동', '민락동', '남천동', '망미동', '수영동'],
+      '강남구': ['삼성동', '압구정동', '청담동', '대치동', '개포동', '도곡동', '역삼동', '논현동', '신사동'],
+      '서초구': ['반포동', '방배동', '서초동', '양재동', '잠원동', '우면동'],
+      '송파구': ['잠실동', '신천동', '가락동', '문정동', '석촌동', '삼전동', '방이동', '오금동'],
+      '분당구': ['백현동', '삼평동', '정자동', '서현동', '수내동', '야탑동', '판교동', '금곡동'],
+    };
+    const list = DONG_OPTIONS_MAP[sigunguName] || [];
+    const parsed = new Set<string>(list);
+
+    properties.forEach(p => {
+      const addr = (p.location || p.fullAddr || '').trim();
+      const parts = addr.split(/\s+/);
+      const idx = parts.findIndex(part => part.includes(sigunguName));
+      if (idx !== -1 && idx + 1 < parts.length) {
+        const dongCandidate = parts[idx + 1].replace(/,.*$/, '').replace(/\(.*$/, '').trim();
+        if (dongCandidate.endsWith('동') || dongCandidate.endsWith('읍') || dongCandidate.endsWith('면')) {
+          parsed.add(dongCandidate);
+        }
+      }
+    });
+
+    if (parsed.size === 0) {
+      return ['1동', '2동'];
+    }
+    return Array.from(parsed);
+  };
+
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hoveredPropertyId, setHoveredPropertyId] = useState<string | null>(null);
@@ -871,6 +962,83 @@ export default function App() {
       }
     }
   }, [selectedMapGroupKey]);
+
+  // Handle map centering and zoom level adjustments when user updates the region filter (Sido > Sigungu > Dong)
+  useEffect(() => {
+    if (!properties || properties.length === 0) return;
+    
+    const matchesSido = (addr: string, s: string) => {
+      const cleanAddr = addr.replace(/\s+/g, '');
+      if (s.startsWith('서울')) return cleanAddr.includes('서울');
+      if (s.startsWith('부산')) return cleanAddr.includes('부산');
+      if (s.startsWith('인천')) return cleanAddr.includes('인천');
+      if (s.startsWith('대전')) return cleanAddr.includes('대전');
+      if (s.startsWith('대구')) return cleanAddr.includes('대구');
+      if (s.startsWith('울산')) return cleanAddr.includes('울산');
+      if (s.startsWith('세종')) return cleanAddr.includes('세종');
+      if (s.startsWith('광주')) return cleanAddr.includes('광주');
+      if (s.startsWith('경기')) return cleanAddr.includes('경기');
+      if (s.startsWith('강원')) return cleanAddr.includes('강원');
+      if (s.includes('충북') || s.includes('충청북도')) return cleanAddr.includes('충북') || cleanAddr.includes('충청북도');
+      if (s.includes('충남') || s.includes('충청남도')) return cleanAddr.includes('충남') || cleanAddr.includes('충청남도');
+      if (s.includes('경북') || s.includes('경상북도')) return cleanAddr.includes('경북') || cleanAddr.includes('경상북도');
+      if (s.includes('경남') || s.includes('경상남도')) return cleanAddr.includes('경남') || cleanAddr.includes('경상남도');
+      if (s.includes('전북') || s.includes('전라북')) return cleanAddr.includes('전북') || cleanAddr.includes('전라북도');
+      if (s.includes('전남') || s.includes('전라남')) return cleanAddr.includes('전남') || cleanAddr.includes('전라남도');
+      if (s.startsWith('제주')) return cleanAddr.includes('제주');
+      return cleanAddr.includes(s.substring(0, 2));
+    };
+
+    const matching = properties.filter(prop => {
+      const addrStr = prop.location || prop.fullAddr || '';
+      if (selectedSido && selectedSido !== '전체' && !matchesSido(addrStr, selectedSido)) return false;
+      if (selectedSigungu && selectedSigungu !== '전체' && !addrStr.includes(selectedSigungu)) return false;
+      if (selectedEupmyeondong && selectedEupmyeondong !== '전체' && !addrStr.includes(selectedEupmyeondong)) return false;
+      return true;
+    });
+
+    if (matching.length > 0) {
+      // Calculate geometric center of matched properties
+      let sumLat = 0;
+      let sumLng = 0;
+      matching.forEach(p => {
+        sumLat += Number(p.mapLat !== undefined ? p.mapLat : p.latitude) || 35.151261;
+        sumLng += Number(p.mapLng !== undefined ? p.mapLng : p.longitude) || 129.029706;
+      });
+      setMapCenter({ lat: sumLat / matching.length, lng: sumLng / matching.length });
+      
+      // Set appropriate zoom levels
+      if (selectedEupmyeondong && selectedEupmyeondong !== '전체') {
+        setMapLevel(3); // Zoom in close to Dong
+      } else if (selectedSigungu && selectedSigungu !== '전체') {
+        setMapLevel(5); // Zoom to Sigungu
+      } else {
+        setMapLevel(7); // Show whole Sido
+      }
+    } else {
+      // Fallback coordinate presets for major cities when search has zero matching database listings
+      if (selectedSido === '부산시') {
+        setMapCenter({ lat: 35.1795543, lng: 129.0756416 });
+        setMapLevel(7);
+      } else if (selectedSido === '서울시') {
+        setMapCenter({ lat: 37.566535, lng: 126.9779692 });
+        setMapLevel(7);
+      } else if (selectedSido === '경기도') {
+        setMapCenter({ lat: 37.2635727, lng: 127.0286009 }); // Suwon
+        setMapLevel(8);
+      } else if (selectedSido === '인천시') {
+        setMapCenter({ lat: 37.4562557, lng: 126.7052062 });
+        setMapLevel(7);
+      }
+    }
+  }, [selectedSido, selectedSigungu, selectedEupmyeondong, properties]);
+
+  // Close region select panel if a different sticky filter dropdown is toggled
+  useEffect(() => {
+    if (activeStickyDropdown !== null) {
+      setIsRegionDropdownOpen(false);
+    }
+  }, [activeStickyDropdown]);
 
   // 2. Cross-Frame real-time message sync (iframe / sidebar interaction)
   useEffect(() => {
@@ -1365,9 +1533,10 @@ export default function App() {
     localStorage.setItem('bugang_favorites', JSON.stringify(favorites));
   }, [favorites]);
 
-  // Reset grid page on any filter state changes
+  // Reset grid page and map group filter on any filter state changes
   useEffect(() => {
     setGridPage(1);
+    setSelectedMapGroupKey(null);
   }, [
     selectedCategory,
     selectedTransaction,
@@ -1795,6 +1964,43 @@ export default function App() {
         if (!matchesName && !matchesLoc && !matchesTags && !matchesDesc) return false;
       }
 
+      // 11. Regional Filter (Sido / Sigungu / Eupmyeondong)
+      if (selectedSido && selectedSido !== '전체') {
+        const matchesSido = (addr: string, s: string) => {
+          const cleanAddr = addr.replace(/\s+/g, '');
+          if (s.startsWith('서울')) return cleanAddr.includes('서울');
+          if (s.startsWith('부산')) return cleanAddr.includes('부산');
+          if (s.startsWith('인천')) return cleanAddr.includes('인천');
+          if (s.startsWith('대전')) return cleanAddr.includes('대전');
+          if (s.startsWith('대구')) return cleanAddr.includes('대구');
+          if (s.startsWith('울산')) return cleanAddr.includes('울산');
+          if (s.startsWith('세종')) return cleanAddr.includes('세종');
+          if (s.startsWith('광주')) return cleanAddr.includes('광주');
+          if (s.startsWith('경기')) return cleanAddr.includes('경기');
+          if (s.startsWith('강원')) return cleanAddr.includes('강원');
+          if (s.includes('충북') || s.includes('충청북도')) return cleanAddr.includes('충북') || cleanAddr.includes('충청북도');
+          if (s.includes('충남') || s.includes('충청남도')) return cleanAddr.includes('충남') || cleanAddr.includes('충청남도');
+          if (s.includes('경북') || s.includes('경상북도')) return cleanAddr.includes('경북') || cleanAddr.includes('경상북도');
+          if (s.includes('경남') || s.includes('경상남도')) return cleanAddr.includes('경남') || cleanAddr.includes('경상남도');
+          if (s.includes('전북') || s.includes('전라북')) return cleanAddr.includes('전북') || cleanAddr.includes('전라북도');
+          if (s.includes('전남') || s.includes('전라남')) return cleanAddr.includes('전남') || cleanAddr.includes('전라남도');
+          if (s.startsWith('제주')) return cleanAddr.includes('제주');
+          return cleanAddr.includes(s.substring(0, 2));
+        };
+        const addrStr = prop.location || prop.fullAddr || '';
+        if (!matchesSido(addrStr, selectedSido)) return false;
+      }
+
+      if (selectedSigungu && selectedSigungu !== '전체') {
+        const addrStr = prop.location || prop.fullAddr || '';
+        if (!addrStr.includes(selectedSigungu)) return false;
+      }
+
+      if (selectedEupmyeondong && selectedEupmyeondong !== '전체') {
+        const addrStr = prop.location || prop.fullAddr || '';
+        if (!addrStr.includes(selectedEupmyeondong)) return false;
+      }
+
       return true;
     });
   }, [
@@ -1821,7 +2027,10 @@ export default function App() {
     filterBathrooms,
     filterFloor,
     filterUseYear,
-    filterDirections
+    filterDirections,
+    selectedSido,
+    selectedSigungu,
+    selectedEupmyeondong
   ]);
 
   // Group properties sharing the exact same address/location
@@ -3345,6 +3554,197 @@ export default function App() {
                 
                 {/* Horizontal Scrolling Naver Filters Group */}
                 <div className="flex flex-wrap items-center gap-1.5 py-1 flex-grow">
+                  
+                  {/* 0. 지역 선택 Selector based on Naver design */}
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => {
+                        setIsRegionDropdownOpen(!isRegionDropdownOpen);
+                        setActiveStickyDropdown(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl border text-[11.5px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                        (selectedSido && selectedSido !== '전체')
+                          ? 'bg-[#03C75A]/10 border-[#03C75A] text-[#03C75A]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#03C75A]" />
+                        <span>
+                          {selectedSido === '전체' 
+                            ? '지역 선택' 
+                            : `${selectedSido === '부산시' ? '부산' : selectedSido === '서울시' ? '서울' : selectedSido} ${selectedSigungu && selectedSigungu !== '전체' ? selectedSigungu : ''} ${selectedEupmyeondong && selectedEupmyeondong !== '전체' ? selectedEupmyeondong : ''}`.trim()}
+                        </span>
+                      </span>
+                      <span className="text-[8px] text-slate-400">▼</span>
+                    </button>
+                    <AnimatePresence>
+                      {isRegionDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute left-0 top-9 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] p-4 min-w-[340px] max-w-[380px] flex flex-col gap-3"
+                        >
+                          {/* Popup Title */}
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-[12.5px] text-slate-500">
+                              시·도 &gt; 시·군·구 &gt; 읍·면·동 선택
+                            </span>
+                            <button onClick={() => setIsRegionDropdownOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Navigation Breadcrumbs */}
+                          <div className="flex items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl text-[11px] font-extrabold text-slate-700">
+                            <button
+                              type="button"
+                              onClick={() => setActiveRegionStep('sido')}
+                              className={`hover:text-[#03C75A] transition-colors ${activeRegionStep === 'sido' ? 'text-[#03C75A] font-black' : ''}`}
+                            >
+                              {selectedSido || '시·도'}
+                            </button>
+                            <span className="text-slate-300 font-normal">&gt;</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedSido !== '전체') {
+                                  setActiveRegionStep('sigungu');
+                                }
+                              }}
+                              className={`hover:text-[#03C75A] transition-colors ${activeRegionStep === 'sigungu' ? 'text-[#03C75A] font-black' : ''} ${selectedSido === '전체' ? 'opacity-40 cursor-not-allowed' : ''}`}
+                              disabled={selectedSido === '전체'}
+                            >
+                              {selectedSigungu && selectedSigungu !== '전체' ? selectedSigungu : '시·군·구'}
+                            </button>
+                            <span className="text-slate-300 font-normal">&gt;</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedSigungu && selectedSigungu !== '전체') {
+                                  setActiveRegionStep('dong');
+                                }
+                              }}
+                              className={`hover:text-[#03C75A] transition-colors ${activeRegionStep === 'dong' ? 'text-[#03C75A] font-black' : ''} ${(selectedSigungu === '전체' || !selectedSigungu) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                              disabled={selectedSigungu === '전체' || !selectedSigungu}
+                            >
+                              {selectedEupmyeondong && selectedEupmyeondong !== '전체' ? selectedEupmyeondong : '읍·면·동'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSido('전체');
+                                setSelectedSigungu('전체');
+                                setSelectedEupmyeondong('전체');
+                                setActiveRegionStep('sido');
+                              }}
+                              className="ml-auto text-[10px] text-slate-400 hover:text-rose-500 font-bold transition-all"
+                            >
+                              초기화
+                            </button>
+                          </div>
+
+                          {/* 1. Sido Selection Grid */}
+                          {activeRegionStep === 'sido' && (
+                            <div className="grid grid-cols-4 gap-1.5 py-1">
+                              {['전체', '서울시', '경기도', '인천시', '부산시', '대전시', '대구시', '울산시', '세종시', '광주시', '강원도', '충청북도', '충청남도', '경상북도', '경상남도', '전북도', '전라남도', '제주도'].map((sido) => {
+                                const isSelected = selectedSido === sido;
+                                return (
+                                  <button
+                                    key={sido}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSido(sido);
+                                      if (sido === '전체') {
+                                        setSelectedSigungu('전체');
+                                        setSelectedEupmyeondong('전체');
+                                        setIsRegionDropdownOpen(false);
+                                      } else {
+                                        setSelectedSigungu('전체');
+                                        setSelectedEupmyeondong('전체');
+                                        setActiveRegionStep('sigungu');
+                                      }
+                                    }}
+                                    className={`p-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
+                                      isSelected
+                                        ? 'bg-[#03C75A] border-[#03C75A] text-white'
+                                        : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {sido}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* 2. Sigungu Selection Grid */}
+                          {activeRegionStep === 'sigungu' && (
+                            <div className="flex flex-col gap-2 max-h-[224px] overflow-y-auto pr-1">
+                              <div className="grid grid-cols-3 gap-1.5 py-1">
+                                {['전체', ...getSigunguOptions(selectedSido)].map((sigungu) => {
+                                  const isSelected = selectedSigungu === sigungu;
+                                  return (
+                                    <button
+                                      key={sigungu}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSigungu(sigungu);
+                                        if (sigungu === '전체') {
+                                          setSelectedEupmyeondong('전체');
+                                          setIsRegionDropdownOpen(false);
+                                        } else {
+                                          setSelectedEupmyeondong('전체');
+                                          setActiveRegionStep('dong');
+                                        }
+                                      }}
+                                      className={`p-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
+                                        isSelected
+                                          ? 'bg-[#03C75A] border-[#03C75A] text-white'
+                                          : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {sigungu}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3. Eupmyeondong Selection Grid */}
+                          {activeRegionStep === 'dong' && (
+                            <div className="flex flex-col gap-2 max-h-[224px] overflow-y-auto pr-1">
+                              <div className="grid grid-cols-3 gap-1.5 py-1">
+                                {['전체', ...getDongOptions(selectedSigungu)].map((dong) => {
+                                  const isSelected = selectedEupmyeondong === dong;
+                                  return (
+                                    <button
+                                      key={dong}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedEupmyeondong(dong);
+                                        setIsRegionDropdownOpen(false);
+                                      }}
+                                      className={`p-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
+                                        isSelected
+                                          ? 'bg-[#03C75A] border-[#03C75A] text-white'
+                                          : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {dong}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   
                   {/* 1. 거래방식 Selector */}
                   <div className="relative shrink-0">
@@ -5023,21 +5423,7 @@ export default function App() {
                     <span>원하는 매물을 클릭하면 지도가 알아서 움직입니다.</span>
                   </div>
 
-                  {selectedMapGroupKey && (
-                    <div className="bg-emerald-50 text-emerald-800 text-[11.5px] font-black p-3 rounded-xl border border-emerald-200/60 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-inner transition-all shrink-0">
-                      <div className="flex items-center gap-1.5 truncate max-w-full">
-                        <span className="p-0.5 px-1.5 bg-[#03C75A] text-white rounded text-[9.5px] font-extrabold shrink-0">필터 활성화</span>
-                        <span className="truncate">선택 지역 {groupedFeedItems.length}개 매물 보는 중</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedMapGroupKey(null)}
-                        className="bg-slate-700 hover:bg-slate-800 text-white font-extrabold text-[10.5px] px-2.5 py-1 rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
-                      >
-                        전체보기 ↩
-                      </button>
-                    </div>
-                  )}
+
 
                   <AnimatePresence mode="popLayout" initial={false}>
                     {groupedFeedItems.map((item, index) => {
@@ -5481,6 +5867,7 @@ export default function App() {
                       style={{ width: "100%", height: "100%" }}
                       level={mapLevel}
                       mapTypeId="ROADMAP"
+                      onClick={() => setSelectedMapGroupKey(null)}
                       onCreate={(map) => {
                         if (map) {
                           try {
@@ -5543,7 +5930,7 @@ export default function App() {
 
                         const isGroup = cluster.isGroup;
                         const propertiesInGroup = cluster.items || [];
-                        const groupSummaries = isGroup ? getGroupSummaries(propertiesInGroup) : [];
+                        const groupSummaries = isGroup ? getGroupSummaries(propertiesInGroup) : (prop ? getGroupSummaries([prop]) : []);
 
                         const isGroupActive = isGroup ? propertiesInGroup.some(p => p.id === activeMarkerId) : (activeMarkerId === prop.id);
                         const isGroupHovered = isGroup ? propertiesInGroup.some(p => p.id === hoveredPropertyId) : (hoveredPropertyId === prop.id);
@@ -5551,6 +5938,9 @@ export default function App() {
                         let propLat = cluster.centerLat;
                         let propLng = cluster.centerLng;
                         
+                        const groupKey = (prop.location || prop.fullAddr || '').trim();
+                        const isSelectedLocGroup = selectedMapGroupKey === groupKey;
+
                         const txColorClass = isPreview 
                           ? 'bg-rose-500 animate-pulse' 
                           : prop.transactionType === '매매' 
@@ -5559,49 +5949,49 @@ export default function App() {
                           ? 'bg-amber-600' 
                           : 'bg-emerald-600';
 
+                        // Green Naver brand border ring for active/clicked overlay
                         const activeRingClass = isPreview
                           ? 'ring-4 ring-rose-400/80 scale-105 border-rose-500 font-extrabold z-[1000] !bg-rose-50'
-                          : isGroupActive 
-                          ? 'border-[3px] border-[#03C75A] bg-[#f8fdfa] ring-4 ring-[#03C75A]/15 scale-110 font-black z-[1002] shadow-lg shadow-[#03C75A]/10' 
+                          : (isGroupActive || isSelectedLocGroup)
+                          ? 'border-2 border-[#03C75A] bg-white ring-4 ring-[#03C75A]/8 scale-105 font-black z-[1002] shadow-xl' 
                           : isGroupHovered 
                           ? 'border-2 border-[#03C75A]/60 scale-105 z-[1001] shadow-md' 
                           : 'border-slate-350';
                         
                         return (
                           <React.Fragment key={cluster.id || prop.id}>
-                            {/* Standard Core Pin */}
-                            <MapMarker
-                              position={{ lat: propLat, lng: propLng }}
-                              onClick={() => {
-                                if (!isPreview) {
-                                  setMapCenter({ lat: propLat, lng: propLng });
-                                  if (isGroup) {
-                                    const groupKey = (prop.location || prop.fullAddr || '').trim();
+                            {/* Render MapMarker ONLY if Selected/Active or in Preview mode */}
+                            {(isSelectedLocGroup || isGroupActive || isPreview) && (
+                              <MapMarker
+                                position={{ lat: propLat, lng: propLng }}
+                                onClick={() => {
+                                  if (!isPreview) {
+                                    setMapCenter({ lat: propLat, lng: propLng });
                                     setSelectedMapGroupKey(groupKey);
-                                    setActiveMarkerId(propertiesInGroup[0].id);
-                                  } else {
-                                    setActiveMarkerId(prop.id);
+                                    if (isGroup) {
+                                      setActiveMarkerId(propertiesInGroup[0].id);
+                                    } else {
+                                      setActiveMarkerId(prop.id);
+                                    }
                                   }
-                                }
-                              }}
-                              image={{
-                                src: isPreview
-                                  ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
-                                  : isGroupActive 
-                                  ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
-                                  : "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
-                                size: isPreview
-                                  ? { width: 31, height: 35 }
-                                  : isGroupActive 
-                                  ? { width: 29, height: 35 }
-                                  : isGroupHovered 
-                                  ? { width: 27, height: 37 }
-                                  : { width: 22, height: 33 }
-                              }}
-                            />
+                                }}
+                                image={{
+                                  src: isPreview
+                                    ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
+                                    : (isGroupActive || isSelectedLocGroup)
+                                    ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
+                                    : "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
+                                  size: isPreview
+                                    ? { width: 31, height: 35 }
+                                    : (isGroupActive || isSelectedLocGroup)
+                                    ? { width: 29, height: 35 }
+                                    : { width: 18, height: 26 }
+                                }}
+                              />
+                            )}
 
-                            {/* Premium Custom Pricing Overlay Badge Sitting Directly Above Pin */}
-                            {isGroup ? (
+                            {/* Clicked / Active Naver style Details Card Overlay */}
+                            {(isSelectedLocGroup || isGroupActive || isPreview) ? (
                               <CustomOverlayMap
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
@@ -5610,65 +6000,79 @@ export default function App() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setMapCenter({ lat: propLat, lng: propLng });
-                                    
-                                    const groupKey = (prop.location || prop.fullAddr || '').trim();
                                     setSelectedMapGroupKey(groupKey);
-                                    setActiveMarkerId(propertiesInGroup[0].id);
+                                    if (propertiesInGroup.length > 0) {
+                                      setActiveMarkerId(propertiesInGroup[0].id);
+                                    }
                                   }}
-                                  className={`relative flex flex-col gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-black rounded-2xl border bg-white shadow-xl text-slate-800 transition-all hover:scale-105 cursor-pointer max-w-[210px] min-w-[160px] ${activeRingClass}`}
+                                  className={`relative flex flex-col p-4 text-xs sm:text-sm font-black rounded-[20px] bg-white text-slate-800 transition-all cursor-pointer shadow-xl min-w-[200px] max-w-[240px] ${activeRingClass}`}
                                   style={{ 
-                                    transform: 'translate(-50%, calc(-100% - 14px))',
+                                    transform: 'translate(-50%, calc(-100% - 15px))',
                                     pointerEvents: 'auto'
                                   }}
                                 >
-                                  {/* Top Header Row of the Group Card */}
-                                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-                                    <span className="font-extrabold text-slate-900 truncate text-[11.5px] sm:text-xs">
+                                  {/* Header Row */}
+                                  <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 pb-2">
+                                    <span className="font-extrabold text-slate-900 truncate text-[12px] sm:text-[13px]">
                                       {getGroupBuildingName(propertiesInGroup, prop.name)}
                                     </span>
                                     <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-white bg-[#03C75A] rounded shrink-0 leading-none">
-                                      {propertiesInGroup.length}개 매물
+                                      {propertiesInGroup.length || 1}개 매물
                                     </span>
                                   </div>
 
-                                  {/* Dynamic Summaries List of Transaction Types & Prices */}
-                                  <div className="flex flex-col gap-1 text-[11px] sm:text-xs pb-1.5">
+                                  {/* Price List */}
+                                  <div className="flex flex-col gap-1.5 py-2">
                                     {groupSummaries.slice(0, 3).map(s => {
-                                      const sumColor = s.type === '매매' ? 'text-indigo-600' : s.type === '전세' ? 'text-amber-500' : 'text-emerald-500';
+                                      const sumColor = s.type === '매매' ? 'text-purple-600' : s.type === '전세' ? 'text-amber-600' : 'text-emerald-600';
                                       return (
-                                        <div key={s.type} className="flex items-center justify-between gap-3 font-semibold">
-                                          <span className={`font-black shrink-0 ${sumColor}`}>{s.type}</span>
-                                          <span className="text-[#2B66FF] font-black tracking-tight truncate leading-none">
-                                            {s.displayStr}
-                                          </span>
+                                        <div key={s.type} className="flex items-center justify-[11px] sm:text-xs">
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className={`font-black shrink-0 ${sumColor}`}>{s.type}</span>
+                                            <span className="text-[#2B66FF] font-black tracking-tight truncate leading-none">
+                                              {s.displayStr}
+                                            </span>
+                                          </div>
                                         </div>
                                       );
                                     })}
+                                    {groupSummaries.length === 0 && (
+                                      <div className="flex items-center justify-[11px] sm:text-xs w-full">
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className={`font-black shrink-0 text-gray-500`}>{prop.transactionType}</span>
+                                          <span className="text-[#2B66FF] font-black tracking-tight truncate leading-none">
+                                            {prop.priceText}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
 
-                                  {/* Bottom Status Row with slanted slash separators as requested */}
-                                  <div className="flex items-center justify-start gap-1.5 text-[10px] sm:text-[11px] text-slate-500 font-bold border-t border-slate-100 pt-1.5 mt-0.5 whitespace-nowrap">
-                                    {groupSummaries.map((s, idx) => (
-                                      <React.Fragment key={s.type}>
-                                        {idx > 0 && <span className="text-slate-300">/</span>}
-                                        <span 
-                                          className="cursor-pointer hover:text-[#03C75A] transition-colors p-1 px-1.5 bg-slate-50 hover:bg-slate-100 rounded border border-slate-200/50 flex items-center gap-1 active:scale-95 text-[10.5px] sm:text-[11.5px] text-slate-700"
-                                          onClick={(ev) => {
-                                            ev.stopPropagation();
-                                            const groupKey = (prop.location || prop.fullAddr || '').trim();
-                                            setSelectedMapGroupKey(groupKey);
-                                            const matchingProp = propertiesInGroup.find(p => p.transactionType === s.type) || propertiesInGroup[0];
+                                  {/* Bottom Tab Pill Buttons */}
+                                  <div className="flex flex-wrap items-center justify-start gap-1 text-[10px] sm:text-[10.5px] border-t border-slate-100 pt-2 bg-white whitespace-nowrap overflow-none">
+                                    {(groupSummaries.length > 0 ? groupSummaries : [{ type: prop.transactionType, count: 1 }]).map((s) => (
+                                      <button
+                                        key={s.type}
+                                        type="button"
+                                        onClick={(ev) => {
+                                          ev.stopPropagation();
+                                          setSelectedMapGroupKey(groupKey);
+                                          const matchingProp = propertiesInGroup.find(p => p.transactionType === s.type) || propertiesInGroup[0] || prop;
+                                          if (matchingProp) {
                                             setActiveMarkerId(matchingProp.id);
-                                          }}
-                                        >
-                                          {s.type} <strong className="text-[#03C75A] font-black">{s.count}</strong>
-                                        </span>
-                                      </React.Fragment>
+                                          }
+                                        }}
+                                        className="cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-205 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-700 flex items-center gap-0.5 transition-all text-[11px]"
+                                      >
+                                        <span>{s.type}</span>
+                                        <strong className="text-[#03C75A] font-black">{s.count}</strong>
+                                      </button>
                                     ))}
                                   </div>
                                 </div>
                               </CustomOverlayMap>
                             ) : (
+                              /* Default Count Bubble (Screenshot 1 design) */
                               <CustomOverlayMap
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
@@ -5676,33 +6080,28 @@ export default function App() {
                                 <div 
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!isPreview) {
-                                      setMapCenter({ lat: propLat, lng: propLng });
+                                    setMapCenter({ lat: propLat, lng: propLng });
+                                    setSelectedMapGroupKey(groupKey);
+                                    if (isGroup) {
+                                      setActiveMarkerId(propertiesInGroup[0].id);
+                                    } else {
                                       setActiveMarkerId(prop.id);
                                     }
                                   }}
-                                  onDoubleClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!isPreview) {
-                                      openDetailsAndSetInquiry(prop);
-                                    }
-                                  }}
-                                  className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-black rounded-xl border bg-white shadow-md text-slate-800 transition-all hover:scale-105 cursor-pointer ${activeRingClass}`}
+                                  className={`flex items-center justify-center cursor-pointer select-none rounded-full text-white font-extrabold hover:scale-110 hover:shadow-lg transition-all border-2 border-white shadow-md active:scale-95 ${
+                                    prop.category === '아파트' || prop.category === '오피스텔' 
+                                      ? 'bg-gradient-to-br from-[#2B66FF] to-[#1e50cc]' 
+                                      : 'bg-gradient-to-br from-[#5c6e88] to-[#404f64]'
+                                  }`}
                                   style={{ 
-                                    whiteSpace: 'nowrap', 
-                                    transform: 'translate(-50%, calc(-100% - 14px))',
-                                    pointerEvents: 'auto'
+                                    transform: 'translate(-50%, -50%)',
+                                    pointerEvents: 'auto',
+                                    width: propertiesInGroup.length > 5 ? '44px' : propertiesInGroup.length > 1 ? '38px' : '32px',
+                                    height: propertiesInGroup.length > 5 ? '44px' : propertiesInGroup.length > 1 ? '38px' : '32px',
+                                    fontSize: propertiesInGroup.length > 5 ? '13px' : '11px'
                                   }}
                                 >
-                                  <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-black text-white rounded flex items-center justify-center shrink-0 ${txColorClass}`}>
-                                    {isPreview ? '등록중' : prop.transactionType}
-                                  </span>
-                                  <span className="max-w-[110px] truncate font-black text-slate-900 mx-1 leading-tight text-xs sm:text-sm border-none">
-                                    {resolvedBuildingNames[prop.id] || (prop.name === '아파트' || prop.name === '오피스텔' || prop.name === '빌라' || prop.name === '원룸' || prop.name === '투룸' || prop.name === '상가' || prop.name === '주택' || prop.name === '분양권' || prop.name === '복합건물' || prop.name === '매물' || prop.name === '스프레드시트 연동 매물' || prop.name === '원룸·투룸' ? (getRefinedBuildingNameFromAddress(prop.location || prop.fullAddr) || prop.name) : prop.name)}
-                                  </span>
-                                  <span className="text-amber-600 font-extrabold shrink-0 text-xs sm:text-sm">
-                                    {prop.priceText || (isPreview ? '위치확인' : '')}
-                                  </span>
+                                  {propertiesInGroup.length || 1}
                                 </div>
                               </CustomOverlayMap>
                             )}
