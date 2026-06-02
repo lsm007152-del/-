@@ -30,6 +30,7 @@ import {
   Lock,
   Plus,
   Trash2,
+  Edit,
   RefreshCw,
   Map as MapIcon,
   LayoutGrid,
@@ -127,6 +128,9 @@ export type ActiveTabType = '매물검색' | '지도검색' | '전체' | '아파
 
 export interface Property {
   id: string;
+  propertyNo?: string;       // 매물번호
+  floorNow?: string;         // 개별 입력 층수
+  floorTotal?: string;       // 개별 입력 총 층수
   name: string;
   category: FilterCategory;
   transactionType: '매매' | '전세' | '월세';
@@ -731,8 +735,12 @@ export default function App() {
   };
 
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   
   const [newProp, setNewProp] = useState({
+    propertyNo: '',
+    floorNow: '',
+    floorTotal: '',
     name: '',
     category: '아파트',
     transactionType: '매매',
@@ -892,8 +900,45 @@ export default function App() {
       const priceValue = rawData.priceValue !== undefined ? String(rawData.priceValue) : '';
       const priceText = String(rawData.priceText || (priceValue ? priceValue + '만' : ''));
 
+      let propertyNoFromPayload = '';
+      if (rawData.propertyNo) {
+        propertyNoFromPayload = String(rawData.propertyNo).trim();
+      } else if (rawData.id && String(rawData.id).startsWith('gas-')) {
+        const parts = String(rawData.id).split('-');
+        if (parts.length >= 2) {
+          propertyNoFromPayload = parts[1]; // extracting from e.g., "gas-12345-timestamp"
+        }
+      }
+
+      // Extract floorNow and floorTotal from rawData
+      let floorNowFromPayload = '';
+      let floorTotalFromPayload = '';
+      if (rawData.floorNow) {
+        floorNowFromPayload = String(rawData.floorNow).replace('층', '').trim();
+      }
+      if (rawData.floorTotal) {
+        floorTotalFromPayload = String(rawData.floorTotal).replace('층', '').trim();
+      }
+
+      // Fallback: if floorNow / floorTotal are empty but floorText or floor is provided, parse it
+      if (!floorNowFromPayload || !floorTotalFromPayload) {
+        const joinedFloor = String(rawData.floorText || rawData.floor || "");
+        if (joinedFloor) {
+          const parts = joinedFloor.split('/');
+          if (parts.length >= 2) {
+            floorNowFromPayload = floorNowFromPayload || parts[0].replace('층', '').trim();
+            floorTotalFromPayload = floorTotalFromPayload || parts[1].replace('총', '').replace('층', '').trim();
+          } else {
+            floorNowFromPayload = floorNowFromPayload || joinedFloor.replace('층', '').trim();
+          }
+        }
+      }
+
       // Fully map properties into simple React form string structure
       setNewProp({
+        propertyNo: propertyNoFromPayload,
+        floorNow: floorNowFromPayload,
+        floorTotal: floorTotalFromPayload,
         name: String(rawData.name || "스프레드시트 연동 매물").trim(),
         category: category,
         transactionType: transactionType,
@@ -1140,6 +1185,110 @@ export default function App() {
     }
   };
 
+  const cancelEditMode = () => {
+    setEditingPropertyId(null);
+    setNewProp({
+      propertyNo: '',
+      floorNow: '',
+      floorTotal: '',
+      name: '',
+      category: '아파트',
+      transactionType: '매매',
+      priceText: '',
+      priceValue: '',
+      rentValue: '',
+      pyongValue: '',
+      floorText: '',
+      direction: '남향',
+      location: '',
+      useYearText: '',
+      useYearValue: '',
+      householdsCount: '',
+      imageUrl: '',
+      tags: '',
+      description: '',
+      note: '',
+      fullAddr: '',
+      area: '',
+      floor: '',
+      dir: '',
+      avail: '',
+      rooms: '',
+      date: '',
+      parking: '',
+      mFee: '',
+      priceHTML: '',
+      type: '',
+      trade: '',
+      mapLat: '',
+      mapLng: ''
+    });
+    setShowAddForm(false);
+  };
+
+  const handleStartEditProperty = (prop: Property) => {
+    setEditingPropertyId(prop.id);
+    
+    let floorNowVal = prop.floorNow || '';
+    let floorTotalVal = prop.floorTotal || '';
+    if (!floorNowVal || !floorTotalVal) {
+      const joined = prop.floorText || prop.floor || '';
+      const parts = joined.split('/');
+      if (parts.length >= 2) {
+        floorNowVal = parts[0].replace('층', '').trim();
+        floorTotalVal = parts[1].replace('총', '').replace('층', '').trim();
+      } else {
+        floorNowVal = joined.replace('층', '').trim();
+      }
+    }
+
+    setNewProp({
+      propertyNo: prop.propertyNo || '',
+      floorNow: floorNowVal,
+      floorTotal: floorTotalVal,
+      name: prop.name || '',
+      category: prop.category || '아파트',
+      transactionType: prop.transactionType || '매매',
+      priceText: prop.priceText || '',
+      priceValue: prop.priceValue !== undefined ? String(prop.priceValue) : '',
+      rentValue: prop.rentValue !== undefined ? String(prop.rentValue) : '',
+      pyongValue: prop.pyongValue !== undefined ? String(prop.pyongValue) : '',
+      floorText: prop.floorText || '',
+      direction: prop.direction || '남향',
+      location: prop.location || '',
+      useYearText: prop.useYearText || '',
+      useYearValue: prop.useYearValue !== undefined ? String(prop.useYearValue) : '',
+      householdsCount: prop.householdsCount !== undefined ? String(prop.householdsCount) : '',
+      imageUrl: prop.imageUrl || '',
+      tags: prop.tags ? prop.tags.join(', ') : '',
+      description: prop.description || '',
+      note: prop.note || '',
+      fullAddr: prop.fullAddr || '',
+      area: prop.area || '',
+      floor: prop.floor || '',
+      dir: prop.dir || '',
+      avail: prop.avail || '',
+      rooms: prop.rooms || '',
+      date: prop.date || '',
+      parking: prop.parking || '',
+      mFee: prop.mFee || '',
+      priceHTML: prop.priceHTML || '',
+      type: prop.type || '',
+      trade: prop.trade || '',
+      mapLat: prop.mapLat !== undefined ? String(prop.mapLat) : (prop.latitude !== undefined ? String(prop.latitude) : ''),
+      mapLng: prop.mapLng !== undefined ? String(prop.mapLng) : (prop.longitude !== undefined ? String(prop.longitude) : '')
+    });
+    setShowAddForm(true);
+    triggerNotification('✏️ 선택한 매물의 정보를 편집 폼에 탑재했습니다. 작성 폼에서 수정한 다음 수정완료 버튼을 누르면 실시간 갱신됩니다.');
+    
+    setTimeout(() => {
+      const el = document.getElementById('register-property-form') || document.getElementById('admin-form-anchor');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
+  };
+
   const handleDeleteProperty = (propertyId: string, e?: React.MouseEvent | React.TouchEvent | any) => {
     // 1. Defensively prevent event bubbling and browser native side flows
     if (e) {
@@ -1187,6 +1336,10 @@ export default function App() {
 
     if (hoveredPropertyId === propertyId) {
       setHoveredPropertyId(null);
+    }
+
+    if (editingPropertyId === propertyId) {
+      cancelEditMode();
     }
 
     setDeletePropertyId(null);
@@ -1408,10 +1561,20 @@ export default function App() {
 
     const pyong = Number(newProp.pyongValue) || 24;
     const useYear = Number(newProp.useYearValue) || 2020;
-    const generatedId = `custom-prop-${Date.now()}`;
+    
+    // Keep exact ID when editing; otherwise generate a custom-prop unique ID
+    const targetId = editingPropertyId || `custom-prop-${Date.now()}`;
+
+    const fNow = newProp.floorNow.trim().replace('층', '');
+    const fTot = newProp.floorTotal.trim().replace('층', '');
+    const compiledFloorText = fNow && fTot ? `${fNow}층/${fTot}층` : (newProp.floorText || '중층');
+    const compiledFloor = fNow && fTot ? `${fNow}층 / 총 ${fTot}층` : (newProp.floor || compiledFloorText);
 
     const created: Property = {
-      id: generatedId,
+      id: targetId,
+      propertyNo: newProp.propertyNo || '',
+      floorNow: newProp.floorNow || '',
+      floorTotal: newProp.floorTotal || '',
       name: newProp.name,
       category: newProp.category as any,
       transactionType: newProp.transactionType as any,
@@ -1419,7 +1582,7 @@ export default function App() {
       priceValue: Number(newProp.priceValue) || 1000,
       rentValue: newProp.rentValue ? Number(newProp.rentValue) : undefined,
       pyongValue: pyong,
-      floorText: newProp.floorText || '고층/20층',
+      floorText: compiledFloorText,
       direction: newProp.direction || '남향',
       location: newProp.location || '부산광역시 부산진구',
       useYearText: newProp.useYearText || `${useYear}년 준공`,
@@ -1442,7 +1605,7 @@ export default function App() {
       // --- 법적 고시 항목 보강 ---
       fullAddr: newProp.fullAddr || newProp.location || '부산광역시 부산진구',
       area: newProp.area || `${pyong}평 (전용 약 ${Math.floor(pyong * 3.3)}㎡)`,
-      floor: newProp.floor || newProp.floorText || '고층/20층',
+      floor: compiledFloor,
       dir: newProp.dir || newProp.direction || '남향',
       avail: newProp.avail || '즉시 입주 및 협의가능',
       rooms: newProp.rooms || '방 3개 / 욕실 2개',
@@ -1456,12 +1619,18 @@ export default function App() {
     };
 
     try {
-      await setDoc(doc(db, 'properties', generatedId), created);
-      triggerNotification('🏠 새 매물이 클라우드 실시간망에 즉각 등록되었습니다.');
+      await setDoc(doc(db, 'properties', targetId), created);
+      if (editingPropertyId) {
+        triggerNotification('📝 매물 정보가 클라우드 실시간망에 즉각 수정 반영되었습니다.');
+      } else {
+        triggerNotification('🏠 새 매물이 클라우드 실시간망에 즉각 등록되었습니다.');
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `properties/${generatedId}`);
+      handleFirestoreError(err, editingPropertyId ? OperationType.UPDATE : OperationType.CREATE, `properties/${targetId}`);
     }
 
+    const wasEditing = !!editingPropertyId;
+    setEditingPropertyId(null);
     setShowAddForm(false);
     
     // Auto-center map on the registered property and highlight it
@@ -1470,6 +1639,9 @@ export default function App() {
     
     // reset form
     setNewProp({
+      propertyNo: '',
+      floorNow: '',
+      floorTotal: '',
       name: '',
       category: '아파트',
       transactionType: '매매',
@@ -1503,7 +1675,11 @@ export default function App() {
       mapLng: ''
     });
 
-    alert('🥳 새 매물이 클라우드 실시간 전산망에 안전하게 직접 등록되었습니다!');
+    if (wasEditing) {
+      alert('🥳 매물 정보 수정이 클라우드 실시간망에 최종 성공적으로 반영되었습니다!');
+    } else {
+      alert('🥳 새 매물이 클라우드 실시간 전산망에 안전하게 직접 등록되었습니다!');
+    }
   };
 
   // Capture div with id=capture-area-{propertyId} as image and download
@@ -4995,30 +5171,50 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShowAddForm(!showAddForm)}
-                      className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      onClick={() => {
+                        if (editingPropertyId) {
+                          cancelEditMode();
+                        } else {
+                          setShowAddForm(!showAddForm);
+                        }
+                      }}
+                      className={`${
+                        editingPropertyId 
+                          ? 'bg-red-650 hover:bg-red-700 text-white' 
+                          : 'bg-slate-900 hover:bg-slate-800'
+                      } text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs`}
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>{showAddForm ? '등록 폼 접기' : '새 매물 직접 등록하기'}</span>
+                      {editingPropertyId ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                      <span>{editingPropertyId ? '수정 취소' : showAddForm ? '등록 폼 접기' : '새 매물 직접 등록하기'}</span>
                     </button>
                   </div>
                 </div>
 
                 {showAddForm && (
                   <form onSubmit={handleRegisterProperty} id="register-property-form" className="bg-white border border-amber-200 rounded-2xl p-5 sm:p-6 flex flex-col gap-5 shadow-md">
-                    <div className="border-b border-amber-100 pb-2.5">
-                      <p className="text-xs font-black text-slate-800 flex items-center gap-1.5 bg-amber-50/50 -mx-6 -mt-6 px-6 py-3 rounded-t-2xl border-b border-amber-200">
-                        <Building className="w-4 h-4 text-amber-600 animate-pulse" />
-                        <span>의무 고시 사항 중심 13대 필수항목 순차 입력 폼</span>
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-2">
-                        소장이 직접 관리하는 수동 매물장입니다. 입력하신 순서대로 매물 요약표에 즉시 반영됩니다.
-                      </p>
-                    </div>
+                     <div className="border-b border-amber-100 pb-2.5">
+                       <p className="text-xs font-black text-slate-800 flex items-center gap-1.5 bg-amber-50/50 -mx-6 -mt-6 px-6 py-3 rounded-t-2xl border-b border-amber-200">
+                         <Building className="w-4 h-4 text-amber-600 animate-pulse" />
+                         <span>{editingPropertyId ? `📌 매물 수정 중: (${newProp.name || '불명'})` : '의무 고시 사항 중심 13대 필수항목 순차 입력 폼'}</span>
+                       </p>
+                       <p className="text-[10px] text-slate-400 font-bold mt-2">
+                         {editingPropertyId ? '선택하신 매물의 속성들이 아래 입력 항목들에 자동 패치되었습니다. 원하는 항목들을 수정한 후 하단의 수정완료 버튼을 누르십시오.' : '소장이 직접 관리하는 수동 매물장입니다. 입력하신 순서대로 매물 요약표에 즉시 반영됩니다.'}
+                       </p>
+                     </div>
 
                     {/* Basic visual identification */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 bg-slate-50/55 p-3 rounded-xl border border-slate-100">
-                      <div className="col-span-1 sm:col-span-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 bg-slate-50/55 p-3 rounded-xl border border-slate-100">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-700 mb-1">🔢 매물번호 (Property ID) *</label>
+                        <input
+                          type="text"
+                          value={newProp.propertyNo}
+                          onChange={(e) => setNewProp(prev => ({ ...prev, propertyNo: e.target.value }))}
+                          placeholder="예: 25164 (빈칸 시 자동등록)"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 bg-amber-50/10"
+                        />
+                      </div>
+                      <div>
                         <label className="block text-[11px] font-black text-slate-700 mb-1">📢 대표 매물명 (단지/동호수 명칭) *</label>
                         <input
                           type="text"
@@ -5197,23 +5393,37 @@ export default function App() {
                       </div>
 
                       {/* 6. 층수 / 총 층수 */}
-                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60">
-                        <label className="block text-[11px] font-black text-amber-900 mb-1">6. 층수 / 총 층수 *</label>
-                        <input
-                          type="text"
-                          required
-                          value={newProp.floor}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, floor: e.target.value }))}
-                          placeholder="예: 15층 / 총 25층"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 mb-2"
-                        />
-                        <input
-                          type="text"
-                          value={newProp.floorText}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, floorText: e.target.value }))}
-                          placeholder="간략표시 예: 15층/25층"
-                          className="w-full text-[11px] border border-slate-200 bg-white rounded-lg p-1.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
-                        />
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 flex flex-col justify-between">
+                        <div>
+                          <label className="block text-[11px] font-black text-amber-900 mb-1">6. 층수 / 총 층수 *</label>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-500 mb-0.5">층수 (현재층)</span>
+                              <input
+                                type="text"
+                                required
+                                value={newProp.floorNow}
+                                onChange={(e) => setNewProp(prev => ({ ...prev, floorNow: e.target.value }))}
+                                placeholder="예: 15"
+                                className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-500 mb-0.5">총 층수</span>
+                              <input
+                                type="text"
+                                required
+                                value={newProp.floorTotal}
+                                onChange={(e) => setNewProp(prev => ({ ...prev, floorTotal: e.target.value }))}
+                                placeholder="예: 25"
+                                className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold leading-tight">
+                          각 칸에 따로 입력되며, 완료 시 요약표와 상세 페이지에는 자동으로 합산 표시됩니다.
+                        </p>
                       </div>
 
                       {/* 7. 입주가능일 */}
@@ -5366,12 +5576,29 @@ export default function App() {
                       />
                     </div>
 
-                    <button
-                      type="submit"
-                      className="mt-2 w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-4 rounded-xl cursor-pointer transition-transform hover:scale-[1.005] duration-150 text-xs text-center flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      🚀 부강공인중개사 소장 전속 매물장에 수동 등록하기
-                    </button>
+                    <div className="flex gap-3 mt-2">
+                      {editingPropertyId && (
+                        <button
+                          type="button"
+                          onClick={cancelEditMode}
+                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-755 font-black py-4 rounded-xl cursor-pointer transition-transform hover:scale-[1.005] duration-150 text-xs"
+                        >
+                          ❌ 수정 취소하기
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className={`${
+                          editingPropertyId 
+                            ? 'bg-[#3A8AF6] hover:bg-[#2563EB] text-white' 
+                            : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                        } flex-[2] font-black py-4 rounded-xl cursor-pointer transition-transform hover:scale-[1.005] duration-150 text-xs text-center flex items-center justify-center gap-2 shadow-sm`}
+                      >
+                        {editingPropertyId 
+                          ? '💾 부강공인중개사 소장 전속 매물 정보 수정 완료하기 (실시간 반영)' 
+                          : '🚀 부강공인중개사 소장 전속 매물장에 수동 등록하기'}
+                      </button>
+                    </div>
                   </form>
                 )}
               </motion.div>
@@ -5465,19 +5692,34 @@ export default function App() {
                                     {prop.name}
                                   </span>
                                   {isAdminMode && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        handleDeleteProperty(prop.id, e);
-                                      }}
-                                      className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors relative z-25 cursor-pointer"
-                                      style={{ color: "#DC2626" }}
-                                      title="매물 즉시 삭제 (관리자)"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          handleStartEditProperty(prop);
+                                        }}
+                                        className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-full transition-colors relative z-25 cursor-pointer"
+                                        style={{ color: "#3B82F6" }}
+                                        title="매물 즉시 수정 (관리자)"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          handleDeleteProperty(prop.id, e);
+                                        }}
+                                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors relative z-25 cursor-pointer"
+                                        style={{ color: "#DC2626" }}
+                                        title="매물 즉시 삭제 (관리자)"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
 
@@ -5995,6 +6237,7 @@ export default function App() {
                               <CustomOverlayMap
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
+                                zIndex={100}
                               >
                                 <div 
                                   onClick={(e) => {
@@ -6076,6 +6319,7 @@ export default function App() {
                               <CustomOverlayMap
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
+                                zIndex={1}
                               >
                                 <div 
                                   onClick={(e) => {
@@ -6088,17 +6332,17 @@ export default function App() {
                                       setActiveMarkerId(prop.id);
                                     }
                                   }}
-                                  className={`flex items-center justify-center cursor-pointer select-none rounded-full text-white font-extrabold hover:scale-110 hover:shadow-lg transition-all border-2 border-white shadow-md active:scale-95 ${
+                                  className={`flex items-center justify-center cursor-pointer select-none rounded-full text-white font-black hover:scale-110 hover:shadow-lg transition-all border border-white shadow-md active:scale-95 ${
                                     prop.category === '아파트' || prop.category === '오피스텔' 
-                                      ? 'bg-gradient-to-br from-[#2B66FF] to-[#1e50cc]' 
-                                      : 'bg-gradient-to-br from-[#5c6e88] to-[#404f64]'
+                                      ? 'bg-[#3A8AF6]' 
+                                      : 'bg-[#7B8C9E]'
                                   }`}
                                   style={{ 
                                     transform: 'translate(-50%, -50%)',
                                     pointerEvents: 'auto',
-                                    width: propertiesInGroup.length > 5 ? '44px' : propertiesInGroup.length > 1 ? '38px' : '32px',
-                                    height: propertiesInGroup.length > 5 ? '44px' : propertiesInGroup.length > 1 ? '38px' : '32px',
-                                    fontSize: propertiesInGroup.length > 5 ? '13px' : '11px'
+                                    width: '32px',
+                                    height: '32px',
+                                    fontSize: '11px'
                                   }}
                                 >
                                   {propertiesInGroup.length || 1}
@@ -6495,21 +6739,36 @@ export default function App() {
                               <span>계약조건 및 매물원장 인쇄/상담</span>
                             </button>
 
-                            {/* Admin Mode - Instant Delete Property Option */}
+                            {/* Admin Mode - Edit and Delete Property Options */}
                             {isAdminMode && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleDeleteProperty(activeProp.id, e);
-                                }}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md mt-1"
-                                style={{ backgroundColor: "#DC2626" }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>매물 전산 즉시 삭제 (관리자 전용)</span>
-                              </button>
+                              <div className="flex gap-2 mt-1.5 w-full">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleStartEditProperty(activeProp);
+                                  }}
+                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+                                  style={{ backgroundColor: "#2563EB" }}
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                  <span>수정하기</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleDeleteProperty(activeProp.id, e);
+                                  }}
+                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+                                  style={{ backgroundColor: "#DC2626" }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>전산 삭제</span>
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -6559,21 +6818,36 @@ export default function App() {
                                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
                               </button>
 
-                              {/* Floating Delete button - Visible only when Admin Mode is Active */}
+                              {/* Floating Edit & Delete buttons - Visible only when Admin Mode is Active */}
                               {isAdminMode && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    handleDeleteProperty(prop.id, e);
-                                  }}
-                                  className="absolute left-3.5 top-3.5 p-2 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-md cursor-pointer z-30 transition-transform hover:scale-105"
-                                  style={{ backgroundColor: "#DC2626" }}
-                                  title="매물 즉시 삭제"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="absolute left-3.5 top-3.5 flex items-center gap-1.5 z-30">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      handleStartEditProperty(prop);
+                                    }}
+                                    className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md cursor-pointer transition-transform hover:scale-105"
+                                    style={{ backgroundColor: "#2563EB" }}
+                                    title="매물 즉시 수정"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      handleDeleteProperty(prop.id, e);
+                                    }}
+                                    className="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-md cursor-pointer transition-transform hover:scale-105"
+                                    style={{ backgroundColor: "#DC2626" }}
+                                    title="매물 즉시 삭제"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               )}
 
                               {/* Dynamic transaction Category badge */}
@@ -7054,19 +7328,35 @@ export default function App() {
                   <span>표 이미지 저장</span>
                 </button>
                 {isAdminMode && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleDeleteProperty(selectedProperty.id, e);
-                    }}
-                    className="bg-red-600 hover:bg-red-750 text-white font-black px-4 py-3 rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                    style={{ backgroundColor: "#DC2626" }}
-                    title="해당 매물을 즉시 삭제하고 목록에서 영구 제거합니다."
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>매물 즉시 삭제</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleStartEditProperty(selectedProperty);
+                        setSelectedProperty(null);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-3 rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      style={{ backgroundColor: "#2563EB" }}
+                      title="해당 매물 정보를 수동 관리자 모드로 수정 제어합니다."
+                    >
+                      <Edit className="w-4 h-4" />
+                      <span>매물 정보 수정</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteProperty(selectedProperty.id, e);
+                      }}
+                      className="bg-red-600 hover:bg-red-750 text-white font-black px-4 py-3 rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      style={{ backgroundColor: "#DC2626" }}
+                      title="해당 매물을 즉시 삭제하고 목록에서 영구 제거합니다."
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>매물 즉시 삭제</span>
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => setSelectedProperty(null)}
