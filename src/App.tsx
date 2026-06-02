@@ -8,10 +8,12 @@ import {
   Home, 
   ChevronRight, 
   ChevronLeft,
+  ChevronDown,
   X, 
   TrendingUp, 
   Check, 
   Heart,
+  Star,
   Menu, 
   Info, 
   Clock, 
@@ -397,7 +399,7 @@ const PropertyDetailTable = ({ data }: { data: Property }) => (
         {[
           { label: '1. 소재지', val: data.fullAddr || data.location },
           { label: '2. 면적', val: data.area || `${data.pyongValue}평 (전용 약 ${Math.floor(data.pyongValue * 3.3)}㎡)` },
-          { label: '3. 가격', val: data.priceHTML || `${data.transactionType} ${data.priceText}` },
+          { label: '3. 가격', val: `${data.transactionType} ${getCleanedPriceText(data.transactionType, data.priceText)}` },
           { label: '4. 중개대상물 종류', val: data.type || data.category },
           { label: '5. 거래형태', val: data.trade || data.transactionType },
           { label: '6. 층수/총층수', val: data.floor || data.floorText },
@@ -422,6 +424,77 @@ const PropertyDetailTable = ({ data }: { data: Property }) => (
     </div>
   </div>
 );
+
+// Helper function to remove redundant "보증금" text for 월세 transactions
+const getCleanedPriceText = (transactionType: string, priceText: string) => {
+  if (transactionType === '월세') {
+    return priceText.replace(/보증금\s*/g, '').trim();
+  }
+  return priceText;
+};
+
+const formatPriceValue = (value: number) => {
+  if (!value) return '0';
+  if (value >= 10000) {
+    const eok = Math.floor(value / 10000);
+    const remainder = value % 10000;
+    if (remainder === 0) {
+      return `${eok}억`;
+    } else {
+      const decimal = (remainder / 1000).toFixed(1).replace('.0', '');
+      return `${eok}.${decimal}억`;
+    }
+  }
+  return `${value.toLocaleString()}만`;
+};
+
+const getGroupSummaries = (properties: Property[]) => {
+  return ['매매', '전세', '월세'].map(type => {
+    const matching = properties.filter(p => p.transactionType === type);
+    if (matching.length === 0) return null;
+
+    const sortedByPrice = [...matching].sort((a, b) => (a.priceValue || 0) - (b.priceValue || 0));
+    const minProp = sortedByPrice[0];
+    const maxProp = sortedByPrice[sortedByPrice.length - 1];
+
+    let displayStr = '';
+
+    if (type === '월세') {
+      const sortedByRent = [...matching].sort((a, b) => ((a.rentValue || 0) * 100 + (a.priceValue || 0)) - ((b.rentValue || 0) * 100 + (b.priceValue || 0)));
+      const minRentProp = sortedByRent[0];
+      const maxRentProp = sortedByRent[sortedByRent.length - 1];
+      
+      if (matching.length === 1) {
+        const rentStr = minRentProp.rentValue ? `${minRentProp.rentValue}만` : '';
+        const depositStr = minRentProp.priceValue ? `${formatPriceValue(minRentProp.priceValue)}` : '';
+        displayStr = `${depositStr}/${rentStr}`;
+      } else {
+        const minRent = minRentProp.rentValue || 0;
+        const maxRent = maxRentProp.rentValue || 0;
+        if (minRent === maxRent) {
+          displayStr = `${minRent}만`;
+        } else {
+          displayStr = `${minRent}~${maxRent}만`;
+        }
+      }
+    } else {
+      const minP = minProp.priceValue || 0;
+      const maxP = maxProp.priceValue || 0;
+      if (minP === maxP) {
+        displayStr = formatPriceValue(minP);
+      } else {
+        displayStr = `${formatPriceValue(minP)}~${formatPriceValue(maxP)}`;
+      }
+    }
+
+    return {
+      type,
+      displayStr,
+      count: matching.length
+    };
+  }).filter(Boolean) as Array<{ type: string; displayStr: string; count: number }>;
+};
+
 export default function App() {
   // ==========================================
   // STATE MANAGEMENT
@@ -460,6 +533,8 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hoveredPropertyId, setHoveredPropertyId] = useState<string | null>(null);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
+  const [selectedMapGroupKey, setSelectedMapGroupKey] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 35.151261, lng: 129.029706 });
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [isKakaoLoaded, setIsKakaoLoaded] = useState<boolean>(false);
@@ -756,7 +831,7 @@ export default function App() {
         date: String(rawData.date || ""),
         parking: String(rawData.parking || "가능"),
         mFee: String(rawData.mFee || ""),
-        priceHTML: String(rawData.priceHTML || `${transactionType} ${priceText}`),
+        priceHTML: String(rawData.priceHTML ? getCleanedPriceText(transactionType, rawData.priceHTML) : `${transactionType} ${getCleanedPriceText(transactionType, priceText)}`),
         type: String(rawData.type || category),
         trade: String(rawData.trade || transactionType),
         mapLat: rawData.latitude !== undefined ? String(rawData.latitude) : (rawData.mapLat !== undefined ? String(rawData.mapLat) : '35.151261'),
@@ -786,6 +861,16 @@ export default function App() {
       delete (window as any).handleAddPropertyFromSheets;
     };
   }, [handleAddPropertyFromSheets]);
+
+  // Scroll sidebar map feed to top when map group filter is applied
+  useEffect(() => {
+    if (selectedMapGroupKey) {
+      const container = document.getElementById("map-listing-feed-container");
+      if (container) {
+        container.scrollTop = 0;
+      }
+    }
+  }, [selectedMapGroupKey]);
 
   // 2. Cross-Frame real-time message sync (iframe / sidebar interaction)
   useEffect(() => {
@@ -1197,7 +1282,7 @@ export default function App() {
       parking: newProp.parking || '세대당 1.2대 수준',
       mFee: newProp.mFee || '약 15만원',
       note: newProp.note || newProp.description || '부강 엄선 실내 추천매물',
-      priceHTML: newProp.priceHTML || `${newProp.transactionType} ${newProp.priceText}`,
+      priceHTML: newProp.priceHTML ? getCleanedPriceText(newProp.transactionType, newProp.priceHTML) : `${newProp.transactionType} ${getCleanedPriceText(newProp.transactionType, newProp.priceText)}`,
       type: newProp.type || newProp.category,
       trade: newProp.trade || newProp.transactionType
     };
@@ -1739,6 +1824,26 @@ export default function App() {
     filterDirections
   ]);
 
+  // Group properties sharing the exact same address/location
+  const groupedFeedItems = useMemo(() => {
+    let list = [...filteredProperties];
+    if (selectedMapGroupKey) {
+      list = list.filter(prop => {
+        const addrKey = (prop.location || prop.fullAddr || '').trim();
+        return addrKey === selectedMapGroupKey;
+      });
+    }
+
+    // Return all properties as individual single items (no grouping/accordion in sidebar!)
+    return list.map(prop => ({
+      isGroup: false,
+      groupKey: (prop.location || prop.fullAddr || '').trim(),
+      name: prop.name,
+      properties: [prop],
+      singleProp: prop
+    }));
+  }, [filteredProperties, selectedMapGroupKey]);
+
   // Compute elegant visual label text representing all active categories
   const displayedCategoryText = useMemo(() => {
     const AVAILABLE_CATEGORIES = ['아파트', '오피스텔', '분양권', '원룸', '투룸', '주택', '빌라', '상가', '공장', '토지'];
@@ -1824,17 +1929,55 @@ export default function App() {
 
   // Dynamic clustering memo based on zoom level (mapLevel)
   const clusteredProperties = useMemo(() => {
-    // Zoom levels below 5 will display individual markers and overlays normally
+    // Zoom levels below 5 will display individual markers and overlays normally, but grouped by identical address/location to avoid stacking!
     if (mapLevel < 5) {
-      return allMapProperties.map(prop => ({
-        isCluster: false,
-        count: 1,
-        centerLat: Number(prop.latitude !== undefined && prop.latitude !== null ? prop.latitude : prop.mapLat) || 35.151261,
-        centerLng: Number(prop.longitude !== undefined && prop.longitude !== null ? prop.longitude : prop.mapLng) || 129.029706,
-        items: [prop],
-        id: `single-${prop.id}`,
-        prop: prop
-      }));
+      const getCoords = (p: Property) => {
+        let lat = Number(p.latitude !== undefined && p.latitude !== null ? p.latitude : p.mapLat);
+        let lng = Number(p.longitude !== undefined && p.longitude !== null ? p.longitude : p.mapLng);
+        if (isNaN(lat) || lat <= 0) lat = 35.151261;
+        if (isNaN(lng) || lng <= 0) lng = 129.029706;
+        return { lat, lng };
+      };
+
+      const sameLocationGroups: { [key: string]: Property[] } = {};
+      allMapProperties.forEach(prop => {
+        const { lat, lng } = getCoords(prop);
+        const addrKey = (prop.location || prop.fullAddr || '').trim();
+        // Since floating point values can differ slightly, round coordinates to 5 decimals
+        const key = `${lat.toFixed(5)}_${lng.toFixed(5)}_${addrKey}`;
+        if (!sameLocationGroups[key]) {
+          sameLocationGroups[key] = [];
+        }
+        sameLocationGroups[key].push(prop);
+      });
+
+      return Object.keys(sameLocationGroups).map(key => {
+        const list = sameLocationGroups[key];
+        const { lat, lng } = getCoords(list[0]);
+        if (list.length === 1) {
+          return {
+            isCluster: false,
+            isGroup: false,
+            count: 1,
+            centerLat: lat,
+            centerLng: lng,
+            items: list,
+            id: `single-${list[0].id}`,
+            prop: list[0]
+          };
+        } else {
+          return {
+            isCluster: false,
+            isGroup: true,
+            count: list.length,
+            centerLat: lat,
+            centerLng: lng,
+            items: list,
+            id: `group-${list[0].id}`,
+            prop: list[0]
+          };
+        }
+      });
     }
 
     // Zoom level >= 5 uses our robust proximity clustering calculation
@@ -2074,6 +2217,104 @@ export default function App() {
     }
     console.log("----------------------------------------");
   }, [kakaoLoading, kakaoError]);
+
+  // Resolved Kakao Map Building names index to map property.id -> real building name
+  const [resolvedBuildingNames, setResolvedBuildingNames] = useState<{[key: string]: string}>({});
+
+  // Synchronous extraction function as a robust fallback
+  const getRefinedBuildingNameFromAddress = (address: string): string => {
+    if (!address) return '';
+    // Pattern 1: find parenthesis content, e.g., (개금동, 현대아파트)
+    const parenMatch = address.match(/\(([^)]+)\)/);
+    if (parenMatch) {
+      const parts = parenMatch[1].split(',');
+      for (let part of parts) {
+        const cleaned = part.trim();
+        if (cleaned.includes('아파트') || cleaned.includes('빌라') || cleaned.includes('오피스텔') || cleaned.includes('맨션') || cleaned.includes('타운') || cleaned.includes('캐슬') || cleaned.includes('아이파크') || cleaned.includes('푸르지오') || cleaned.includes('힐스테이트') || cleaned.includes('자이') || cleaned.includes('더샵') || cleaned.includes('래미안')) {
+          return cleaned;
+        }
+      }
+    }
+    // Pattern 2: Check standard words containing complex words in the address
+    const words = address.split(/\s+/);
+    for (let i = words.length - 1; i >= 0; i--) {
+      const w = words[i].trim();
+      if (w.includes('아파트') || w.includes('빌라') || w.includes('오피스텔') || w.includes('맨션') || w.includes('타운') || w.includes('캐슬') || w.includes('아이파크') || w.includes('자이') || w.includes('더샵')) {
+        return w.replace(/[()]/g, '');
+      }
+    }
+    return '';
+  };
+
+  // Helper to dynamically get non-generic building name for single/grouped map indicators
+  const getGroupBuildingName = (propertiesInGroup: Property[], groupName: string) => {
+    if (!propertiesInGroup || propertiesInGroup.length === 0) return groupName;
+    const firstProp = propertiesInGroup[0];
+    
+    // 1. Check if Kakao Maps dynamic reverse geocoder resolved it
+    if (resolvedBuildingNames[firstProp.id]) {
+      return resolvedBuildingNames[firstProp.id];
+    }
+    
+    // 2. If the current name itself is not generic, use it!
+    const isGeneric = !groupName || groupName === '아파트' || groupName === '오피스텔' || groupName === '빌라' || groupName === '원룸' || groupName === '투룸' || groupName === '상가' || groupName === '주택' || groupName === '분양권' || groupName === '복합건물' || groupName === '매물' || groupName === '스프레드시트 연동 매물' || groupName === '원룸·투룸';
+    if (!isGeneric) {
+      return groupName;
+    }
+    
+    // 3. Otherwise try parsing address synchronously
+    const fallbackParsed = getRefinedBuildingNameFromAddress(firstProp.location || firstProp.fullAddr);
+    if (fallbackParsed) {
+      return fallbackParsed;
+    }
+    
+    return groupName;
+  };
+
+  // Dynamic reverse-geocoder trigger to update building names using real Kakao services
+  useEffect(() => {
+    if (!isKakaoLoaded) return;
+    const anyWin = window as any;
+    if (!anyWin.kakao || !anyWin.kakao.maps || !anyWin.kakao.maps.services) return;
+
+    try {
+      const geocoder = new anyWin.kakao.maps.services.Geocoder();
+      properties.forEach(prop => {
+        if (resolvedBuildingNames[prop.id]) return;
+
+        const pName = prop.name;
+        const isGenericName = !pName || pName === '아파트' || pName === '오피스텔' || pName === '빌라' || pName === '원룸' || pName === '투룸' || pName === '상가' || pName === '주택' || pName === '분양권' || pName === '복합건물' || pName === '매물' || pName === '스프레드시트 연동 매물' || pName === '원룸·투룸';
+
+        if (isGenericName) {
+          const lat = Number(prop.latitude !== undefined && prop.latitude !== null ? prop.latitude : prop.mapLat) || 35.151261;
+          const lng = Number(prop.longitude !== undefined && prop.longitude !== null ? prop.longitude : prop.mapLng) || 129.029706;
+
+          geocoder.coord2Address(lng, lat, (result: any[], status: string) => {
+            if (status === anyWin.kakao.maps.services.Status.OK && result && result.length > 0) {
+              const roadAddr = result[0].road_address;
+              const bName = roadAddr ? roadAddr.building_name : '';
+              if (bName) {
+                setResolvedBuildingNames(prev => ({
+                  ...prev,
+                  [prop.id]: bName
+                }));
+              } else {
+                const parseName = getRefinedBuildingNameFromAddress(prop.location || prop.fullAddr);
+                if (parseName) {
+                  setResolvedBuildingNames(prev => ({
+                    ...prev,
+                    [prop.id]: parseName
+                  }));
+                }
+              }
+            }
+          });
+        }
+      });
+    } catch (err) {
+      console.error("Error in reverse geocoding building names:", err);
+    }
+  }, [isKakaoLoaded, properties, resolvedBuildingNames]);
 
   // Mandatory 3-second timeout to prevent endless spinner wait screens
   useEffect(() => {
@@ -4775,18 +5016,36 @@ export default function App() {
               /* Map Side-by-Side Split Screen Layout (Naver Real Estate Style) */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch bg-white rounded-3xl p-3 border border-amber-200/50 shadow-xs">
                 
-                {/* Right Listing Feed: Compact horizontal row items (lg:col-span-3, order-2) */}
-                <div id="map-listing-feed-container" className="order-2 lg:order-2 lg:col-span-3 flex flex-col gap-3.5 max-h-[380px] lg:max-h-[580px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                {/* Right Listing Feed: Compact horizontal row items (lg:col-span-4, order-2) */}
+                <div id="map-listing-feed-container" className="order-2 lg:order-2 lg:col-span-4 flex flex-col gap-3.5 max-h-[420px] lg:max-h-[580px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                   <div className="bg-amber-50/50 text-slate-600 text-[11px] font-bold p-3 rounded-xl border border-amber-100/60 flex items-center gap-2 justify-center">
                     <Info className="w-4 h-4 text-amber-500 animate-bounce" />
                     <span>원하는 매물을 클릭하면 지도가 알아서 움직입니다.</span>
                   </div>
 
+                  {selectedMapGroupKey && (
+                    <div className="bg-emerald-50 text-emerald-800 text-[11.5px] font-black p-3 rounded-xl border border-emerald-200/60 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-inner transition-all shrink-0">
+                      <div className="flex items-center gap-1.5 truncate max-w-full">
+                        <span className="p-0.5 px-1.5 bg-[#03C75A] text-white rounded text-[9.5px] font-extrabold shrink-0">필터 활성화</span>
+                        <span className="truncate">선택 지역 {groupedFeedItems.length}개 매물 보는 중</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMapGroupKey(null)}
+                        className="bg-slate-700 hover:bg-slate-800 text-white font-extrabold text-[10.5px] px-2.5 py-1 rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
+                      >
+                        전체보기 ↩
+                      </button>
+                    </div>
+                  )}
+
                   <AnimatePresence mode="popLayout" initial={false}>
-                    {filteredProperties.map((prop, index) => {
-                      const isFavorite = favorites.includes(prop.id);
-                      const isHovered = hoveredPropertyId === prop.id;
-                      const isActive = activeMarkerId === prop.id;
+                    {groupedFeedItems.map((item, index) => {
+                      if (!item.isGroup) {
+                        const prop = item.singleProp!;
+                        const isFavorite = favorites.includes(prop.id);
+                        const isHovered = hoveredPropertyId === prop.id;
+                        const isActive = activeMarkerId === prop.id;
 
                         return (
                           <motion.div
@@ -4796,12 +5055,12 @@ export default function App() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.15) }}
-                            className={`group p-3 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 relative bg-white ${
+                            className={`group p-4 rounded-xl border transition-all duration-200 cursor-pointer flex justify-between gap-4 relative bg-white text-left ${
                               isActive
-                                ? 'border-2 border-amber-500 bg-amber-50/40 shadow-md ring-4 ring-amber-400/50 scale-[1.01] z-10'
+                                ? 'border-2 border-[#03C75A] bg-[#fdfefd] shadow-md ring-4 ring-[#03C75A]/10 scale-[1.01] z-10'
                                 : isHovered
-                                ? 'border border-amber-400 bg-amber-50/10 shadow-sm ring-1 ring-amber-400/10'
-                                : 'border border-slate-100 hover:border-amber-300 hover:bg-slate-55/35'
+                                ? 'border border-[#03C75A]/60 bg-[#EAF9F1]/10 shadow-xs'
+                                : 'border border-slate-150 hover:border-slate-300 hover:bg-slate-50/20'
                             }`}
                             onMouseEnter={() => setHoveredPropertyId(prop.id)}
                             onMouseLeave={() => setHoveredPropertyId(null)}
@@ -4811,104 +5070,303 @@ export default function App() {
                             }}
                             id={`map-property-${prop.id}`}
                           >
-                            {/* Image container on Left */}
-                            <div className="w-24 sm:w-28 h-20 sm:h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 relative shadow-inner">
-                              <img
-                                src={prop.imageUrl}
-                                alt={prop.name}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                              {/* Category Badge */}
-                              <span className="absolute left-1 top-1 bg-slate-950/80 backdrop-blur-xs text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                {prop.category}
-                              </span>
-                            </div>
-
-                            {/* Data block on Right */}
-                            <div className="flex flex-col justify-between flex-grow min-w-0">
+                            {/* Text Spec Column on Left */}
+                            <div className="flex flex-col justify-between flex-grow min-w-0 pr-1">
                               <div>
-                                <div className="flex items-center justify-between gap-1 mb-1">
-                                  <span className="text-amber-600 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 flex-wrap">
-                                    <span className="bg-amber-100/85 text-amber-900 px-1.5 py-0.5 rounded text-[10px] font-black">{prop.transactionType}</span>
-                                    <strong className="text-slate-900 text-sm sm:text-base font-black tracking-tight">{prop.priceText}</strong>
+                                {/* Row 1: Representative Property Name & Optional Admin Actions */}
+                                <div className="flex items-center justify-between gap-1.5 mb-1.5 select-none">
+                                  <span className="text-[11px] font-extrabold text-[#03C75A] bg-[#EAF9F1] border border-[#CDEFE0] px-2 py-0.5 rounded-sm truncate max-w-[150px] sm:max-w-[185px]">
+                                    {prop.name}
                                   </span>
-                                  
-                                  <div className="flex items-center gap-0.5">
-                                    {isAdminMode && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          handleDeleteProperty(prop.id, e);
-                                        }}
-                                        className="text-red-500 hover:bg-red-100/80 hover:text-red-700 p-1.5 rounded-full transition-all cursor-pointer relative z-20"
-                                        style={{ color: "#DC2626" }}
-                                        title="매물 즉시 삭제 (관리자)"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
+                                  {isAdminMode && (
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        toggleFavorite(prop.id, e);
+                                        e.preventDefault();
+                                        handleDeleteProperty(prop.id, e);
                                       }}
-                                      className="text-slate-400 hover:text-red-500 p-1 rounded-full transition-all"
+                                      className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors relative z-25 cursor-pointer"
+                                      style={{ color: "#DC2626" }}
+                                      title="매물 즉시 삭제 (관리자)"
                                     >
-                                      <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
-                                  </div>
+                                  )}
                                 </div>
-                                
-                                <h4 className="text-xs sm:text-sm md:text-[14px] font-black text-slate-900 line-clamp-1 group-hover:text-amber-600 transition-colors mt-0.5">
-                                  {prop.name}
-                                </h4>
-                                
-                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-1 tracking-tight flex items-center gap-1">
-                                  <span className="bg-slate-100 px-1 py-0.2 rounded font-black text-slate-500">{prop.pyongValue}평</span>
-                                  <span>|</span>
-                                  <span>{prop.floorText.split('/')[0]}</span>
-                                  <span>|</span>
-                                  <span className="truncate max-w-[90px]">{prop.direction}</span>
+
+                                {/* Row 2: Price Label in vibrant blue */}
+                                <div className="text-[16px] sm:text-[17px] font-black text-[#2B66FF] tracking-tight">
+                                  {prop.transactionType} <span className="font-extrabold">{getCleanedPriceText(prop.transactionType, prop.priceText)}</span>
+                                </div>
+
+                                {/* Row 3: Standard Specifications dot format */}
+                                <div className="text-[11.5px] text-slate-600 font-extrabold tracking-tight mt-1 line-clamp-1">
+                                  {prop.category + (prop.area ? ` · ${prop.area}` : ` · ${prop.pyongValue}평`)} · {prop.floorText.split('/')[0]}층 · {prop.direction}
+                                </div>
+
+                                {/* Row 4: Descriptive info */}
+                                <p className="text-[11.5px] text-slate-500 font-bold leading-snug tracking-tight mt-0.5 line-clamp-2">
+                                  {prop.description || `${prop.name} - 깨끗하고 생활하기 최고인 인기 매물`}
                                 </p>
+
+                                {/* Row 5: Secondary Tags rounded-xs array */}
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {(prop.tags || []).slice(0, 3).map((tag, tIdx) => (
+                                    <span key={tIdx} className="bg-[#F2F4F7] text-[#555E6D] text-[10px] font-extrabold px-1.5 py-0.5 rounded-sm select-none">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Image Flow Column on Right (Image + 상세보기 Button) */}
+                            <div className="flex flex-col gap-2 flex-shrink-0 items-center justify-start w-24 sm:w-28">
+                              {/* Image Box */}
+                              <div className="w-full h-24 sm:h-28 rounded-lg overflow-hidden bg-slate-50 relative border border-slate-150 shadow-inner">
+                                <img
+                                  src={prop.imageUrl}
+                                  alt={prop.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                />
+
+                                {/* Favorite Box Outline inside the Image exactly like bottom right Star box */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(prop.id, e);
+                                  }}
+                                  className="absolute bottom-1 right-1 bg-white hover:bg-slate-50 border border-slate-200 p-1 rounded shadow-xs transition-colors z-20 cursor-pointer flex items-center justify-center w-[26px] h-[26px]"
+                                  title="관심매물 등록"
+                                >
+                                  <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
+                                </button>
                               </div>
 
-                              {/* CTAs */}
-                              <div className="flex items-center gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openDetailsAndSetInquiry(prop);
-                                  }}
-                                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] sm:text-[10px] font-black py-1 px-2.5 rounded-lg flex items-center gap-0.5 transition-colors cursor-pointer"
-                                >
-                                  <span>상세상담</span>
-                                  <ChevronRight className="w-2.5 h-2.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSaveAsImage(prop.id);
-                                  }}
-                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] sm:text-[10px] font-bold py-1 px-2.5 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  이미지저장
-                                </button>
-                              </div>
+                              {/* Action Button under mapping image */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDetailsAndSetInquiry(prop);
+                                }}
+                                className="w-full bg-[#03C75A] hover:bg-[#02b350] text-white text-[11px] sm:text-[12px] font-black py-1.5 rounded shadow-xs transition-colors cursor-pointer text-center"
+                              >
+                                상세보기
+                              </button>
                             </div>
                           </motion.div>
                         );
-                      })}
+                      } else {
+                        const propertiesInGroup = item.properties;
+                        const isExpanded = expandedGroupKeys.includes(item.groupKey);
+                        const summaries = getGroupSummaries(propertiesInGroup);
+
+                        return (
+                          <div id={`feed-group-${item.groupKey}`} key={item.groupKey} className="flex flex-col gap-2 bg-slate-50/40 p-1.5 rounded-2xl border border-slate-200/60 shadow-2xs">
+                            {/* Main Group Summary Card */}
+                            <motion.div
+                              layout
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setExpandedGroupKeys(expandedGroupKeys.filter(k => k !== item.groupKey));
+                                } else {
+                                  setExpandedGroupKeys([...expandedGroupKeys, item.groupKey]);
+                                  const firstProp = propertiesInGroup[0];
+                                  setMapCenter({ lat: firstProp.mapLat, lng: firstProp.mapLng });
+                                }
+                              }}
+                              className={`p-4 rounded-xl border bg-white select-none text-left cursor-pointer transition-all duration-350 relative flex justify-between gap-4 ${
+                                isExpanded
+                                  ? 'border-2 border-[#03C75A] shadow-md ring-4 ring-[#03C75A]/5'
+                                  : 'border-slate-200 hover:border-slate-300 hover:shadow-2xs'
+                              }`}
+                            >
+                              {/* Left Text details */}
+                              <div className="flex flex-col justify-between flex-grow min-w-0 pr-1">
+                                <div>
+                                  {/* Title: Name of Complex */}
+                                  <div className="flex items-center gap-1.5 mb-1.5 select-none">
+                                    <span className="text-white text-[10px] font-extrabold bg-[#03C75A] px-2 py-0.5 rounded-xs">
+                                      {propertiesInGroup[0].category || '매물단지'}
+                                    </span>
+                                    <span className="text-[11px] text-slate-400 font-extrabold max-w-[155px] truncate block">
+                                      {propertiesInGroup[0].location.split(' ').slice(1, 3).join(' ')}
+                                    </span>
+                                  </div>
+                                  
+                                  <h3 className="text-[17px] sm:text-[18px] font-black text-slate-900 tracking-tight leading-snug">
+                                    {getGroupBuildingName(propertiesInGroup, item.name)}
+                                  </h3>
+
+                                  {/* Price summaries list exactly like original Naver Realtor list */}
+                                  <div className="flex flex-col gap-1 mt-2.5">
+                                    {summaries.map(s => (
+                                      <div key={s.type} className="flex items-center gap-2">
+                                        <span className={`w-8 text-[12.5px] font-black ${
+                                          s.type === '매매' ? 'text-blue-500' : s.type === '전세' ? 'text-indigo-500' : 'text-emerald-500'
+                                        }`}>
+                                          {s.type}
+                                        </span>
+                                        <span className="text-[14px] sm:text-[15px] font-extrabold text-[#2B66FF] tracking-tight">
+                                          {s.displayStr}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Count text summaries (e.g. 매매 72 | 전세 3 | 월세 1) */}
+                                  <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-500 font-bold border-t border-slate-100 pt-2.5 mt-3">
+                                    {summaries.map((s, idx) => (
+                                      <React.Fragment key={s.type}>
+                                        {idx > 0 && <span className="text-slate-300">/</span>}
+                                        <span>
+                                          {s.type} <strong className="text-[#03C75A] font-black">{s.count}</strong>
+                                        </span>
+                                      </React.Fragment>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right graphics */}
+                              <div className="flex flex-col gap-2.5 flex-shrink-0 items-center justify-center w-25 sm:w-28 relative">
+                                <div className="w-full h-24 sm:h-28 rounded-lg overflow-hidden bg-slate-100 relative border border-slate-200/80 shadow-xs flex items-center justify-center">
+                                  {propertiesInGroup[0].imageUrl ? (
+                                    <img
+                                      src={propertiesInGroup[0].imageUrl}
+                                      alt="Group thumb"
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover transition-transform"
+                                    />
+                                  ) : (
+                                    <Building className="w-8 h-8 text-slate-300" />
+                                  )}
+
+                                  {/* Dynamic overlap count bubble */}
+                                  <div className="absolute inset-0 bg-black/45 backdrop-blur-[0.5px] flex flex-col items-center justify-center text-white p-1">
+                                    <span className="text-[20px] sm:text-[22px] font-black tracking-tight leading-none">
+                                      +{propertiesInGroup.length}
+                                    </span>
+                                    <span className="text-[9px] sm:text-[10px] font-black text-amber-300 mt-1 uppercase tracking-wider">
+                                      개 매물보기
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Nice toggle badge */}
+                                <div className={`flex items-center justify-center gap-1 text-[11px] font-black py-1 px-2.5 rounded-full border transition-all ${
+                                  isExpanded 
+                                    ? 'bg-[#EAF9F1] border-[#CDEFE0] text-[#03C75A]' 
+                                    : 'bg-white border-slate-200 text-slate-600'
+                                }`}>
+                                  <span>{isExpanded ? '닫기' : '매물 목록'}</span>
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#03C75A]' : 'text-slate-400'}`} />
+                                </div>
+                              </div>
+                            </motion.div>
+
+                            {/* Nested Expandable Properties Lists inside clean, bordered sub-panel */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden flex flex-col gap-2.5 pl-3 border-l-2 border-[#03C75A]/30 mt-1"
+                                >
+                                  {propertiesInGroup.map((subProp) => {
+                                    const isSubFavorite = favorites.includes(subProp.id);
+                                    const isSubHovered = hoveredPropertyId === subProp.id;
+                                    const isSubActive = activeMarkerId === subProp.id;
+
+                                    return (
+                                      <div
+                                        key={subProp.id}
+                                        className={`p-3.5 rounded-xl border text-left cursor-pointer flex justify-between gap-3 relative transition-all bg-white hover:bg-slate-50/30 ${
+                                          isSubActive
+                                            ? 'border-2 border-[#03C75A] shadow-xs'
+                                            : 'border-slate-150 hover:border-slate-250'
+                                        }`}
+                                        onMouseEnter={() => setHoveredPropertyId(subProp.id)}
+                                        onMouseLeave={() => setHoveredPropertyId(null)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setMapCenter({ lat: subProp.mapLat, lng: subProp.mapLng });
+                                          setActiveMarkerId(subProp.id);
+                                        }}
+                                      >
+                                        <div className="flex flex-col justify-between flex-grow min-w-0">
+                                          <div>
+                                            <div className="flex items-center gap-1.5 mb-1 select-none">
+                                              <span className="text-[10px] font-black text-[#03C75A] bg-[#EAF9F1] px-1.5 py-0.2 rounded-xs border border-[#CDEFE0]">
+                                                {subProp.transactionType}
+                                              </span>
+                                              <span className="text-[11.5px] text-slate-500 font-extrabold truncate">
+                                                {subProp.category} · {subProp.pyongValue}평
+                                              </span>
+                                            </div>
+
+                                            <div className="text-[15px] font-black text-[#2B66FF] tracking-tight">
+                                              {subProp.transactionType} <span className="font-extrabold">{getCleanedPriceText(subProp.transactionType, subProp.priceText)}</span>
+                                            </div>
+
+                                            <div className="text-[11.2px] text-slate-500 font-bold mt-0.5">
+                                              {subProp.floorText.split('/')[0]}층 · {subProp.direction}
+                                            </div>
+
+                                            {subProp.description ? (
+                                              <p className="text-[10.5px] text-slate-400 font-bold mt-1 max-w-[190px] truncate">
+                                                {subProp.description}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex flex-shrink-0 flex-col gap-1.5 items-end justify-between">
+                                          {/* Star favorite mini button */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleFavorite(subProp.id, e);
+                                            }}
+                                            className="bg-slate-50 hover:bg-slate-100 border border-slate-200 p-1.5 rounded-sm transition-colors cursor-pointer w-[26px] h-[26px] flex items-center justify-center animate-none"
+                                            title="관심매물 등록"
+                                          >
+                                            <Star className={`w-3 h-3 ${isSubFavorite ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openDetailsAndSetInquiry(subProp);
+                                            }}
+                                            className="bg-[#03C75A] hover:bg-[#02b350] text-[#fff] text-[11px] font-black px-2.5 py-1.5 rounded cursor-pointer text-center"
+                                          >
+                                            상세보기
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      }
+                    })}
                   </AnimatePresence>
                 </div>
 
-                {/* Left Interactive Kakao Map Panel (lg:col-span-9, order-1) */}
-                <div className="order-1 lg:order-1 lg:col-span-9 h-[380px] lg:h-[580px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
+                {/* Left Interactive Kakao Map Panel (lg:col-span-8, order-1) */}
+                <div className="order-1 lg:order-1 lg:col-span-8 h-[380px] lg:h-[580px] rounded-2xl border border-amber-200/40 shadow-sm relative overflow-hidden bg-slate-50 flex flex-col justify-between">
 
 
                   {/* Troubleshooting Guide Box overlay when requested */}
@@ -5079,12 +5537,16 @@ export default function App() {
                           );
                         }
 
-                        // Otherwise render standard single marker as before
+                        // Otherwise render standard single marker or group marker as before
                         const prop = cluster.prop;
                         if (!prop) return null;
 
-                        const isHovered = hoveredPropertyId === prop.id;
-                        const isActive = activeMarkerId === prop.id;
+                        const isGroup = cluster.isGroup;
+                        const propertiesInGroup = cluster.items || [];
+                        const groupSummaries = isGroup ? getGroupSummaries(propertiesInGroup) : [];
+
+                        const isGroupActive = isGroup ? propertiesInGroup.some(p => p.id === activeMarkerId) : (activeMarkerId === prop.id);
+                        const isGroupHovered = isGroup ? propertiesInGroup.some(p => p.id === hoveredPropertyId) : (hoveredPropertyId === prop.id);
                         const isPreview = prop.id === 'new-prop-preview';
                         let propLat = cluster.centerLat;
                         let propLng = cluster.centerLng;
@@ -5099,78 +5561,151 @@ export default function App() {
 
                         const activeRingClass = isPreview
                           ? 'ring-4 ring-rose-400/80 scale-105 border-rose-500 font-extrabold z-[1000] !bg-rose-50'
-                          : isActive 
-                          ? 'border-[3px] border-amber-500 bg-amber-50 ring-4 ring-amber-400/40 scale-110 font-black z-[1002] shadow-lg shadow-amber-500/10' 
-                          : isHovered 
-                          ? 'border-2 border-amber-400 scale-105 z-[1001] shadow-md' 
-                          : 'border-slate-300';
+                          : isGroupActive 
+                          ? 'border-[3px] border-[#03C75A] bg-[#f8fdfa] ring-4 ring-[#03C75A]/15 scale-110 font-black z-[1002] shadow-lg shadow-[#03C75A]/10' 
+                          : isGroupHovered 
+                          ? 'border-2 border-[#03C75A]/60 scale-105 z-[1001] shadow-md' 
+                          : 'border-slate-350';
                         
                         return (
-                          <React.Fragment key={prop.id}>
+                          <React.Fragment key={cluster.id || prop.id}>
                             {/* Standard Core Pin */}
                             <MapMarker
                               position={{ lat: propLat, lng: propLng }}
                               onClick={() => {
                                 if (!isPreview) {
                                   setMapCenter({ lat: propLat, lng: propLng });
-                                  setActiveMarkerId(prop.id);
+                                  if (isGroup) {
+                                    const groupKey = (prop.location || prop.fullAddr || '').trim();
+                                    setSelectedMapGroupKey(groupKey);
+                                    setActiveMarkerId(propertiesInGroup[0].id);
+                                  } else {
+                                    setActiveMarkerId(prop.id);
+                                  }
                                 }
                               }}
                               image={{
                                 src: isPreview
                                   ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
-                                  : isActive 
+                                  : isGroupActive 
                                   ? "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png"
                                   : "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
                                 size: isPreview
                                   ? { width: 31, height: 35 }
-                                  : isActive 
+                                  : isGroupActive 
                                   ? { width: 29, height: 35 }
-                                  : isHovered 
+                                  : isGroupHovered 
                                   ? { width: 27, height: 37 }
                                   : { width: 22, height: 33 }
                               }}
                             />
 
                             {/* Premium Custom Pricing Overlay Badge Sitting Directly Above Pin */}
-                            <CustomOverlayMap
-                              position={{ lat: propLat, lng: propLng }}
-                              clickable={true}
-                            >
-                              <div 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isPreview) {
-                                    setMapCenter({ lat: propLat, lng: propLng });
-                                    setActiveMarkerId(prop.id);
-                                  }
-                                }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isPreview) {
-                                    openDetailsAndSetInquiry(prop);
-                                  }
-                                }}
-                                className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-black rounded-xl border bg-white shadow-md text-slate-800 transition-all hover:scale-105 cursor-pointer ${activeRingClass}`}
-                                style={{ 
-                                  whiteSpace: 'nowrap', 
-                                  transform: 'translate(-50%, -135%)',
-                                  pointerEvents: 'auto'
-                                }}
+                            {isGroup ? (
+                              <CustomOverlayMap
+                                position={{ lat: propLat, lng: propLng }}
+                                clickable={true}
                               >
-                                <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-black text-white rounded flex items-center justify-center shrink-0 ${txColorClass}`}>
-                                  {isPreview ? '등록중' : prop.transactionType}
-                                </span>
-                                <span className="max-w-[110px] truncate font-black text-slate-900 mx-1 leading-tight text-xs sm:text-sm border-none">
-                                  {prop.name.replace(' 아파트', '')}
-                                </span>
-                                <span className="text-amber-600 font-extrabold shrink-0 text-xs sm:text-sm">
-                                  {prop.priceText || (isPreview ? '위치확인' : '')}
-                                </span>
-                                
-                                {/* Clean background container without center triangle to avoid placement confusion */}
-                              </div>
-                            </CustomOverlayMap>
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMapCenter({ lat: propLat, lng: propLng });
+                                    
+                                    const groupKey = (prop.location || prop.fullAddr || '').trim();
+                                    setSelectedMapGroupKey(groupKey);
+                                    setActiveMarkerId(propertiesInGroup[0].id);
+                                  }}
+                                  className={`relative flex flex-col gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-black rounded-2xl border bg-white shadow-xl text-slate-800 transition-all hover:scale-105 cursor-pointer max-w-[210px] min-w-[160px] ${activeRingClass}`}
+                                  style={{ 
+                                    transform: 'translate(-50%, calc(-100% - 14px))',
+                                    pointerEvents: 'auto'
+                                  }}
+                                >
+                                  {/* Top Header Row of the Group Card */}
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                                    <span className="font-extrabold text-slate-900 truncate text-[11.5px] sm:text-xs">
+                                      {getGroupBuildingName(propertiesInGroup, prop.name)}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-white bg-[#03C75A] rounded shrink-0 leading-none">
+                                      {propertiesInGroup.length}개 매물
+                                    </span>
+                                  </div>
+
+                                  {/* Dynamic Summaries List of Transaction Types & Prices */}
+                                  <div className="flex flex-col gap-1 text-[11px] sm:text-xs pb-1.5">
+                                    {groupSummaries.slice(0, 3).map(s => {
+                                      const sumColor = s.type === '매매' ? 'text-indigo-600' : s.type === '전세' ? 'text-amber-500' : 'text-emerald-500';
+                                      return (
+                                        <div key={s.type} className="flex items-center justify-between gap-3 font-semibold">
+                                          <span className={`font-black shrink-0 ${sumColor}`}>{s.type}</span>
+                                          <span className="text-[#2B66FF] font-black tracking-tight truncate leading-none">
+                                            {s.displayStr}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Bottom Status Row with slanted slash separators as requested */}
+                                  <div className="flex items-center justify-start gap-1.5 text-[10px] sm:text-[11px] text-slate-500 font-bold border-t border-slate-100 pt-1.5 mt-0.5 whitespace-nowrap">
+                                    {groupSummaries.map((s, idx) => (
+                                      <React.Fragment key={s.type}>
+                                        {idx > 0 && <span className="text-slate-300">/</span>}
+                                        <span 
+                                          className="cursor-pointer hover:text-[#03C75A] transition-colors p-1 px-1.5 bg-slate-50 hover:bg-slate-100 rounded border border-slate-200/50 flex items-center gap-1 active:scale-95 text-[10.5px] sm:text-[11.5px] text-slate-700"
+                                          onClick={(ev) => {
+                                            ev.stopPropagation();
+                                            const groupKey = (prop.location || prop.fullAddr || '').trim();
+                                            setSelectedMapGroupKey(groupKey);
+                                            const matchingProp = propertiesInGroup.find(p => p.transactionType === s.type) || propertiesInGroup[0];
+                                            setActiveMarkerId(matchingProp.id);
+                                          }}
+                                        >
+                                          {s.type} <strong className="text-[#03C75A] font-black">{s.count}</strong>
+                                        </span>
+                                      </React.Fragment>
+                                    ))}
+                                  </div>
+                                </div>
+                              </CustomOverlayMap>
+                            ) : (
+                              <CustomOverlayMap
+                                position={{ lat: propLat, lng: propLng }}
+                                clickable={true}
+                              >
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isPreview) {
+                                      setMapCenter({ lat: propLat, lng: propLng });
+                                      setActiveMarkerId(prop.id);
+                                    }
+                                  }}
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isPreview) {
+                                      openDetailsAndSetInquiry(prop);
+                                    }
+                                  }}
+                                  className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-black rounded-xl border bg-white shadow-md text-slate-800 transition-all hover:scale-105 cursor-pointer ${activeRingClass}`}
+                                  style={{ 
+                                    whiteSpace: 'nowrap', 
+                                    transform: 'translate(-50%, calc(-100% - 14px))',
+                                    pointerEvents: 'auto'
+                                  }}
+                                >
+                                  <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-black text-white rounded flex items-center justify-center shrink-0 ${txColorClass}`}>
+                                    {isPreview ? '등록중' : prop.transactionType}
+                                  </span>
+                                  <span className="max-w-[110px] truncate font-black text-slate-900 mx-1 leading-tight text-xs sm:text-sm border-none">
+                                    {resolvedBuildingNames[prop.id] || (prop.name === '아파트' || prop.name === '오피스텔' || prop.name === '빌라' || prop.name === '원룸' || prop.name === '투룸' || prop.name === '상가' || prop.name === '주택' || prop.name === '분양권' || prop.name === '복합건물' || prop.name === '매물' || prop.name === '스프레드시트 연동 매물' || prop.name === '원룸·투룸' ? (getRefinedBuildingNameFromAddress(prop.location || prop.fullAddr) || prop.name) : prop.name)}
+                                  </span>
+                                  <span className="text-amber-600 font-extrabold shrink-0 text-xs sm:text-sm">
+                                    {prop.priceText || (isPreview ? '위치확인' : '')}
+                                  </span>
+                                </div>
+                              </CustomOverlayMap>
+                            )}
                           </React.Fragment>
                         );
                       })}
@@ -5648,7 +6183,7 @@ export default function App() {
                                   {prop.category}
                                 </span>
                                 <span className="text-white text-sm sm:text-base font-black tracking-tight drop-shadow-sm/85">
-                                  {prop.transactionType} {prop.priceText}
+                                  {prop.transactionType} {getCleanedPriceText(prop.transactionType, prop.priceText)}
                                 </span>
                               </div>
                             </div>
@@ -6055,7 +6590,7 @@ export default function App() {
                   <div className="absolute bottom-4 left-4">
                     <span className="text-xs text-amber-300 font-extrabold uppercase">매물 안내 실시간</span>
                     <p className="text-white text-lg sm:text-xl font-black mt-0.5">
-                      {selectedProperty.transactionType} {selectedProperty.priceText}
+                      {selectedProperty.transactionType} {getCleanedPriceText(selectedProperty.transactionType, selectedProperty.priceText)}
                     </p>
                   </div>
                 </div>
