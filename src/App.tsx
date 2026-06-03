@@ -889,43 +889,78 @@ export default function App() {
 
       console.log("[Sheets Integration] Inbound payload detected:", rawData);
 
+      // Define possible keys for the fields (both English camelCase/snake_case and standard Korean)
+      const propertyNoKeys = ['propertyNo', '매물번호', '번호', 'property_no', 'propertyid', '매물id', 'id'];
+      const nameKeys = ['name', '매물명', '단지명', '명칭', '대표매물명', '건물명', '동호명', '제목', 'title'];
+      const categoryKeys = ['category', '매물종류', '종류', '분류', 'type', '구분', '중개대상물 종류'];
+      const transactionTypeKeys = ['transactionType', '거래형태', '거래구분', '거래유형', 'trade', '거래', '거래형태 *'];
+      const priceTextKeys = ['priceText', '가격', '금액', '매매가', '보증금', '전세가', 'price_text', '가격 텍스트', '가격(보증금/월세 텍스트 및 정렬용) *'];
+      const priceValueKeys = ['priceValue', '보증금액', '매매금액', '전세금액', '수지값', '보증금', '매매가', '전세가', '임대보증금', 'price'];
+      const rentValueKeys = ['rentValue', '월세액', '월세', '월세금액', '월임대료', '임대료', 'rent', '월세액(만원,옵션)'];
+      const pyongKeys = ['pyongValue', '평수', '평형', '평', 'pyong', '면적', '전용면적', '공급면적', 'area', '면적 (고시 내용 및 평수) *'];
+      const floorNowKeys = ['floorNow', '층수', '층', '현재층', 'floor_now', '층수(현재층)'];
+      const floorTotalKeys = ['floorTotal', '총층수', '총층', '전체층', 'floor_total'];
+      const locationKeys = ['location', 'fullAddr', '소재지', '지번주소', '도로명주소', '주소', 'address', 'full_addr', '소재지 (지번/도로명 주소) *'];
+      const availKeys = ['avail', '입주일', '입주시기', '입주가능일', '이사일', 'availability', '입주가능일 *'];
+      const roomsKeys = ['rooms', '방수', '욕실수', '방개수', '방구조', '구조', '방 수 / 욕실 수 *'];
+      const directionKeys = ['direction', 'dir', '방향', '향', '방향 *'];
+      const useYearKeys = ['useYearValue', 'date', '사용승인일', '준공일', '준공년도', '연식', '사용승인일 *'];
+      const parkingKeys = ['parking', '주차대수', '주차', '주차대수수준', '주차대수 *'];
+      const mFeeKeys = ['mFee', '관리비', '월관리비', 'm_fee', '관리비 *'];
+      const descKeys = ['description', 'note', '특징', '매물특징', '비고', '상세설명', '메모', '매물 특징 및 추가 한줄 권장설정 *'];
+      const imageKeys = ['imageUrl', '사진', '이미지', '대표이미지', '이미지url', 'image', 'image_url', '대표 이미지 인터넷 주소 URL'];
+
+      // Ultra-robust getter for English & Korean keys (case/space-insensitive)
+      const getVal = (possibleKeys: string[], defaultVal: any = ''): any => {
+        for (const k of possibleKeys) {
+          // Exact match
+          if (rawData[k] !== undefined && rawData[k] !== null && String(rawData[k]).trim() !== '' && String(rawData[k]).trim().toLowerCase() !== 'empty') {
+            return rawData[k];
+          }
+          // Lowercase & spaces trimmed match
+          const cleanK = k.toLowerCase().replace(/\s+/g, '');
+          for (const rawKey of Object.keys(rawData)) {
+            const cleanRawKey = rawKey.toLowerCase().replace(/\s+/g, '');
+            if (cleanRawKey === cleanK) {
+              const val = rawData[rawKey];
+              if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim().toLowerCase() !== 'empty') {
+                return val;
+              }
+            }
+          }
+        }
+        return defaultVal;
+      };
+
       // Clean category to match acceptable system enums correctly
-      const categoryFromPayload = String(rawData.category || "").trim();
+      const categoryFromPayload = String(getVal(categoryKeys, "아파트")).trim();
       const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지", "아파트 오피스텔"].includes(categoryFromPayload)
         ? categoryFromPayload
         : "아파트";
 
-      const transactionTypeFromPayload = String(rawData.transactionType || "").trim();
+      const transactionTypeFromPayload = String(getVal(transactionTypeKeys, "매매")).trim();
       const transactionType = ["매매", "전세", "월세"].includes(transactionTypeFromPayload)
         ? transactionTypeFromPayload
         : "매매";
 
-      const priceValue = rawData.priceValue !== undefined ? String(rawData.priceValue) : '';
-      const priceText = String(rawData.priceText || (priceValue ? priceValue + '만' : ''));
+      const priceValue = getVal(priceValueKeys, '');
+      const priceText = String(getVal(priceTextKeys, '') || (priceValue ? priceValue + '만' : ''));
 
-      let propertyNoFromPayload = '';
-      if (rawData.propertyNo) {
-        propertyNoFromPayload = String(rawData.propertyNo).trim();
-      } else if (rawData.id && String(rawData.id).startsWith('gas-')) {
+      let propertyNoFromPayload = String(getVal(propertyNoKeys, '')).trim();
+      if (!propertyNoFromPayload && rawData.id && String(rawData.id).startsWith('gas-')) {
         const parts = String(rawData.id).split('-');
         if (parts.length >= 2) {
           propertyNoFromPayload = parts[1]; // extracting from e.g., "gas-12345-timestamp"
         }
       }
 
-      // Extract floorNow and floorTotal from rawData
-      let floorNowFromPayload = '';
-      let floorTotalFromPayload = '';
-      if (rawData.floorNow) {
-        floorNowFromPayload = String(rawData.floorNow).replace('층', '').trim();
-      }
-      if (rawData.floorTotal) {
-        floorTotalFromPayload = String(rawData.floorTotal).replace('층', '').trim();
-      }
+      // Extract floorNow and floorTotal from getVal
+      let floorNowFromPayload = String(getVal(floorNowKeys, '')).replace('층', '').trim();
+      let floorTotalFromPayload = String(getVal(floorTotalKeys, '')).replace('층', '').trim();
 
       // Fallback: if floorNow / floorTotal are empty but floorText or floor is provided, parse it
       if (!floorNowFromPayload || !floorTotalFromPayload) {
-        const joinedFloor = String(rawData.floorText || rawData.floor || "");
+        const joinedFloor = String(getVal(['floorText', 'floor'], ''));
         if (joinedFloor) {
           const parts = joinedFloor.split('/');
           if (parts.length >= 2) {
@@ -937,24 +972,35 @@ export default function App() {
         }
       }
 
-      const pyong = Number(rawData.pyongValue) || 24;
-      const useYear = Number(rawData.useYearValue) || 2015;
+      const inputPyong = getVal(pyongKeys, '');
+      const pyong = Number(inputPyong) || 24;
+
+      const inputUseYear = getVal(useYearKeys, '');
+      let useYear = 2015;
+      if (inputUseYear) {
+        const match = String(inputUseYear).match(/\d{4}/);
+        if (match) {
+          useYear = Number(match[0]);
+        } else if (Number(inputUseYear)) {
+          useYear = Number(inputUseYear);
+        }
+      }
       
-      const targetId = propertyNoFromPayload ? `gas-${propertyNoFromPayload}` : (rawData.id || `gas-${Date.now()}`);
+      const targetId = propertyNoFromPayload ? `gas-${propertyNoFromPayload}` : (getVal(['id'], '') || `gas-${Date.now()}`);
 
       const fNow = floorNowFromPayload.replace('층', '');
       const fTot = floorTotalFromPayload.replace('층', '');
-      const compiledFloorText = fNow && fTot ? `${fNow}층/${fTot}층` : (String(rawData.floorText || rawData.floor || '중층'));
-      const compiledFloor = fNow && fTot ? `${fNow}층 / 총 ${fTot}층` : (String(rawData.floor || rawData.floorText || compiledFloorText));
+      const compiledFloorText = fNow && fTot ? `${fNow}층/${fTot}층` : (String(getVal(['floorText', 'floor'], '중층')));
+      const compiledFloor = fNow && fTot ? `${fNow}층 / 총 ${fTot}층` : (String(getVal(['floor', 'floorText'], compiledFloorText)));
 
-      const priceHTMLText = rawData.priceHTML 
-        ? getCleanedPriceText(transactionType, String(rawData.priceHTML)) 
+      const priceHTMLText = getVal(['priceHTML'], '') 
+        ? getCleanedPriceText(transactionType, String(getVal(['priceHTML'], ''))) 
         : `${transactionType} ${getCleanedPriceText(transactionType, priceText)}`;
 
       // Resolve lat & lng
       let lat = 35.151261;
       let lng = 129.029706;
-      const addressToSearch = String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대");
+      const addressToSearch = String(getVal(locationKeys, "부산광역시 부산진구 냉정로 일대"));
 
       const getLocalFallbackCoords = (addr: string) => {
         let fLat = 35.151261;
@@ -1024,24 +1070,24 @@ export default function App() {
           propertyNo: propertyNoFromPayload,
           floorNow: floorNowFromPayload,
           floorTotal: floorTotalFromPayload,
-          name: String(rawData.name || "스프레드시트 연동 매물").trim(),
+          name: String(getVal(nameKeys, "스프레드시트 연동 매물")).trim(),
           category: category as any,
           transactionType: transactionType as any,
           priceText: priceText || '가격 협의',
-          priceValue: Number(rawData.priceValue) || 1000,
-          rentValue: rawData.rentValue ? Number(rawData.rentValue) : undefined,
+          priceValue: Number(priceValue) || 1000,
+          rentValue: getVal(rentValueKeys, '') ? Number(getVal(rentValueKeys, '')) : undefined,
           pyongValue: pyong,
           floorText: compiledFloorText,
-          direction: String(rawData.direction || "남향"),
-          location: String(rawData.location || "부산광역시 부산진구 냉정로 일대"),
-          useYearText: String(rawData.useYearText || `${useYear}년 준공`),
+          direction: String(getVal(directionKeys, "남향")),
+          location: addressToSearch,
+          useYearText: String(getVal(['useYearText', '연식', '준공일'], `${useYear}년 준공`)),
           useYearValue: useYear,
-          householdsCount: Number(rawData.householdsCount) || 150,
-          imageUrl: String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80"),
+          householdsCount: Number(getVal(['householdsCount', '세대수'], 150)),
+          imageUrl: String(getVal(imageKeys, "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80")),
           tags: Array.isArray(rawData.tags)
             ? rawData.tags
-            : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags.split(',').map((s: string) => s.trim()) : ["실시간연동", "추천매물"]),
-          description: String(rawData.description || "구글 스프레드시트에서 실시간 자동 연동된 안전성이 검증된 매물입니다."),
+            : (getVal(['tags'], '') ? String(getVal(['tags'], '')).split(',').map((s: string) => s.trim()) : ["실시간연동", "추천매물"]),
+          description: String(getVal(descKeys, "구글 스프레드시트에서 실시간 자동 연동된 안전성이 검증된 매물입니다.")),
           features: [
             '중개사 책임 실사 완료 특급 상태',
             '인근 대중교통 이용 최상 인프라 권역',
@@ -1053,18 +1099,18 @@ export default function App() {
           mapLat: lat,
           mapLng: lng,
           fullAddr: addressToSearch,
-          area: String(rawData.area || `${pyong}평 (전용 약 ${Math.floor(pyong * 3.3)}㎡)`),
+          area: String(getVal(['area', '면적', '전용면적'], `${pyong}평 (전용 약 ${Math.floor(pyong * 3.3)}㎡)`)),
           floor: compiledFloor,
-          dir: String(rawData.dir || rawData.direction || "남향"),
-          avail: String(rawData.avail || "즉시 입주 및 협의가능"),
-          rooms: String(rawData.rooms || "방 3개 / 욕실 2개"),
-          date: String(rawData.date || `${useYear}.01.01`),
-          parking: String(rawData.parking || "세대당 1.2대 수준"),
-          mFee: String(rawData.mFee || "약 15만원"),
-          note: String(rawData.note || rawData.description || "구글 스프레드시트 실시간 동기화 매물"),
+          dir: String(getVal(directionKeys, "남향")),
+          avail: String(getVal(availKeys, "즉시 입주 및 협의가능")),
+          rooms: String(getVal(roomsKeys, "방 3개 / 욕실 2개")),
+          date: String(getVal(['date', '사용승인일', '준공일'], `${useYear}.01.01`)),
+          parking: String(getVal(parkingKeys, "세대당 1.2대 수준")),
+          mFee: String(getVal(mFeeKeys, "약 15만원")),
+          note: String(getVal(descKeys, "구글 스프레드시트 실시간 동기화 매물")),
           priceHTML: priceHTMLText,
-          type: String(rawData.type || category),
-          trade: String(rawData.trade || transactionType),
+          type: String(getVal(['type', 'category', '종류', '매물종류'], category)),
+          trade: String(getVal(['trade', 'transactionType', '거래형태', '거래구분'], transactionType)),
           isFromSheets: true
         };
 
@@ -1098,18 +1144,15 @@ export default function App() {
         const sanitizedCreated = sanitizeForFirestore(created);
 
         try {
-          await setDoc(doc(db, 'properties', targetId), sanitizedCreated);
+          // Enable Administrator Mode so the user can see admin controls and edit/delete properties immediately
+          setIsAdminMode(true);
+          setShowAddForm(true);
           
-          triggerNotification(`🎉 [전산 실시간 동기화 완료] 스프레드시트 매물 "${created.name}"이(가) 즉시 DB에 자동 등록되었습니다!`);
-          
-          // Focus view on the updated/created listing
-          setActiveMarkerId(targetId);
+          // Focus view on the geocoded coordinates, but let the user review and hit submit manually
           setMapCenter({ lat, lng });
           setViewMode('map');
           
-          // Enable Administrator Mode so the user can see admin controls and edit/delete properties immediately
-          setIsAdminMode(true);
-          setShowAddForm(false);
+          triggerNotification(`📥 [스프레드시트 전산 연동] 매물 "${created.name}"의 모든 정보가 아래 등록 창에 임시 기입되었습니다! 검토 후 최하단 오렌지색 등록하기 버튼을 클릭하십시오.`);
           
           // Sync newProp state so references are consistent
           setNewProp({
@@ -1148,10 +1191,19 @@ export default function App() {
             mapLat: String(lat),
             mapLng: String(lng)
           });
+
+          // Scroll smoothly to the form for high user visibility
+          setTimeout(() => {
+            const formEl = document.getElementById('register-property-form') || document.getElementById('capture_area');
+            if (formEl) {
+              formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 400);
+
         } catch (dbErr: any) {
-          console.error("[Firestore Auto-sync Error]", dbErr);
+          console.error("[Sheets Pre-fill Error]", dbErr);
           const errorMsg = dbErr?.message || String(dbErr);
-          triggerNotification(`❌ 스프레드시트 매물의 실시간 자동 DB등록 중 오류가 발생했습니다: ${errorMsg}`);
+          triggerNotification(`❌ 스프레드시트 매물의 실시간 수동 프리필 중 오류가 발생했습니다: ${errorMsg}`);
         }
       };
 
@@ -1785,8 +1837,8 @@ export default function App() {
     const pyong = Number(newProp.pyongValue) || 24;
     const useYear = Number(newProp.useYearValue) || 2020;
     
-    // Keep exact ID when editing; otherwise generate a custom-prop unique ID
-    const targetId = editingPropertyId || `custom-prop-${Date.now()}`;
+    // Keep exact ID when editing; otherwise generate a custom-prop unique ID or respect spreadsheet property ID
+    const targetId = editingPropertyId || (newProp.propertyNo ? `gas-${newProp.propertyNo}` : `custom-prop-${Date.now()}`);
 
     const fNow = newProp.floorNow.trim().replace('층', '');
     const fTot = newProp.floorTotal.trim().replace('층', '');
