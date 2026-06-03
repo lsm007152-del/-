@@ -166,6 +166,7 @@ export interface Property {
   priceHTML?: string;
   type?: string;
   trade?: string;
+  isFromSheets?: boolean;
   
   imageUrl: string;
   latitude?: number;
@@ -396,7 +397,7 @@ const INITIAL_PROPERTIES: Property[] = [
 const PropertyDetailTable = ({ data }: { data: Property }) => (
   <div id="capture_area" className="w-[520px] bg-white p-5 border border-amber-200 shadow-xl rounded-2xl">
     <div className="bg-amber-600 text-white p-4 text-center font-black text-lg tracking-tight rounded-t-xl mb-4">
-      🏠 부강부동산 ・ 매물번호: {data.id}
+      🏠 부강부동산 ・ 매물번호: {data.propertyNo || data.id}
     </div>
     <table className="w-full text-xs border-collapse border border-amber-200">
       <tbody>
@@ -430,11 +431,13 @@ const PropertyDetailTable = ({ data }: { data: Property }) => (
 );
 
 // Helper function to remove redundant "보증금" text for 월세 transactions
-const getCleanedPriceText = (transactionType: string, priceText: string) => {
+const getCleanedPriceText = (transactionType: string, priceText: any) => {
+  if (priceText === undefined || priceText === null) return '';
+  const str = String(priceText);
   if (transactionType === '월세') {
-    return priceText.replace(/보증금\s*/g, '').trim();
+    return str.replace(/보증금\s*/g, '').trim();
   }
-  return priceText;
+  return str;
 };
 
 const formatPriceValue = (value: number) => {
@@ -877,7 +880,7 @@ export default function App() {
   }, []);
 
   // Expose a public function to add properties from Google Sheets (Apps Script).
-  // This populates the React admin creation form (newProp) and opens the editor form directly.
+  // This automatically commits the property directly into Firestore and highlights it.
   const handleAddPropertyFromSheets = (rawData: any) => {
     try {
       if (!rawData || typeof rawData !== "object") {
@@ -934,53 +937,195 @@ export default function App() {
         }
       }
 
-      // Fully map properties into simple React form string structure
-      setNewProp({
-        propertyNo: propertyNoFromPayload,
-        floorNow: floorNowFromPayload,
-        floorTotal: floorTotalFromPayload,
-        name: String(rawData.name || "스프레드시트 연동 매물").trim(),
-        category: category,
-        transactionType: transactionType,
-        priceText: priceText,
-        priceValue: priceValue,
-        rentValue: rawData.rentValue !== undefined ? String(rawData.rentValue) : '',
-        pyongValue: rawData.pyongValue !== undefined ? String(rawData.pyongValue) : '24',
-        floorText: String(rawData.floorText || "중층"),
-        direction: String(rawData.direction || "남향"),
-        location: String(rawData.location || "부산광역시 부산진구 냉정로 일대"),
-        useYearText: String(rawData.useYearText || "2015년 준공"),
-        useYearValue: rawData.useYearValue !== undefined ? String(rawData.useYearValue) : '2015',
-        householdsCount: rawData.householdsCount !== undefined ? String(rawData.householdsCount) : '150',
-        imageUrl: String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80"),
-        tags: Array.isArray(rawData.tags)
-          ? rawData.tags.join(', ')
-          : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags : "실시간연동, 추천매물"),
-        description: String(rawData.description || "구글 스프레드시트에서 가져온 안전성이 높은 매물입니다."),
-        note: String(rawData.note || ""),
-        fullAddr: String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대"),
-        area: String(rawData.area || ""),
-        floor: String(rawData.floor || rawData.floorText || "중층"),
-        dir: String(rawData.dir || rawData.direction || "남향"),
-        avail: String(rawData.avail || "즉시 입주"),
-        rooms: String(rawData.rooms || ""),
-        date: String(rawData.date || ""),
-        parking: String(rawData.parking || "가능"),
-        mFee: String(rawData.mFee || ""),
-        priceHTML: String(rawData.priceHTML ? getCleanedPriceText(transactionType, rawData.priceHTML) : `${transactionType} ${getCleanedPriceText(transactionType, priceText)}`),
-        type: String(rawData.type || category),
-        trade: String(rawData.trade || transactionType),
-        mapLat: rawData.latitude !== undefined ? String(rawData.latitude) : (rawData.mapLat !== undefined ? String(rawData.mapLat) : '35.151261'),
-        mapLng: rawData.longitude !== undefined ? String(rawData.longitude) : (rawData.mapLng !== undefined ? String(rawData.mapLng) : '129.029706')
-      });
+      const pyong = Number(rawData.pyongValue) || 24;
+      const useYear = Number(rawData.useYearValue) || 2015;
+      
+      const targetId = propertyNoFromPayload ? `gas-${propertyNoFromPayload}` : (rawData.id || `gas-${Date.now()}`);
 
-      // Turn on Administrator Mode so the Admin Panel is visible!
-      setIsAdminMode(true);
-      // Open the interactive Add Property Form block!
-      setShowAddForm(true);
+      const fNow = floorNowFromPayload.replace('층', '');
+      const fTot = floorTotalFromPayload.replace('층', '');
+      const compiledFloorText = fNow && fTot ? `${fNow}층/${fTot}층` : (String(rawData.floorText || rawData.floor || '중층'));
+      const compiledFloor = fNow && fTot ? `${fNow}층 / 총 ${fTot}층` : (String(rawData.floor || rawData.floorText || compiledFloorText));
 
-      // Trigger user-friendly notification
-      triggerNotification("📋 스프레드시트에서 매물 데이터가 성공적으로 불러와졌습니다. 확인 후 하단의 '매물 등록완료' 버튼을 눌러 공표해주세요!");
+      const priceHTMLText = rawData.priceHTML 
+        ? getCleanedPriceText(transactionType, String(rawData.priceHTML)) 
+        : `${transactionType} ${getCleanedPriceText(transactionType, priceText)}`;
+
+      // Resolve lat & lng
+      let lat = 35.151261;
+      let lng = 129.029706;
+      const addressToSearch = String(rawData.fullAddr || rawData.location || "부산광역시 부산진구 냉정로 일대");
+
+      const getLocalFallbackCoords = (addr: string) => {
+        let fLat = 35.151261;
+        let fLng = 129.029706;
+        const q = addr.toLowerCase();
+        if (q.includes('냉정로 273') || q.includes('부강')) {
+          fLat = 35.151261;
+          fLng = 1129.029706;
+        } else if (q.includes('현대아파트') || q.includes('현대 아이파크') || q.includes('현대아이파크')) {
+          fLat = 35.151261;
+          fLng = 129.029706;
+        } else if (q.includes('우성')) {
+          fLat = 35.1485;
+          fLng = 129.0145;
+        } else {
+          const hash = addr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          fLat = 35.151261 + (hash % 100) / 10000;
+          fLng = 129.029706 + (hash % 100) / 10000;
+        }
+        return { lat: fLat, lng: fLng };
+      };
+
+      const resolveAndSave = async () => {
+        if (rawData.latitude !== undefined && rawData.longitude !== undefined) {
+          lat = Number(rawData.latitude);
+          lng = Number(rawData.longitude);
+        } else if (rawData.mapLat !== undefined && rawData.mapLng !== undefined) {
+          lat = Number(rawData.mapLat);
+          lng = Number(rawData.mapLng);
+        } else {
+          // Attempt Kakao geocoding
+          const anyWin = window as any;
+          if (anyWin.kakao && anyWin.kakao.maps && anyWin.kakao.maps.services) {
+            try {
+              const geocoder = new anyWin.kakao.maps.services.Geocoder();
+              const coordResult = await new Promise<{lat: number, lng: number} | null>((resolve) => {
+                geocoder.addressSearch(addressToSearch, (result: any[], status: string) => {
+                  if (status === anyWin.kakao.maps.services.Status.OK && result && result.length > 0) {
+                    resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
+                  } else {
+                    resolve(null);
+                  }
+                });
+              });
+              if (coordResult) {
+                lat = coordResult.lat;
+                lng = coordResult.lng;
+              } else {
+                const fallbackCoords = getLocalFallbackCoords(addressToSearch);
+                lat = fallbackCoords.lat;
+                lng = fallbackCoords.lng;
+              }
+            } catch (err) {
+              const fallbackCoords = getLocalFallbackCoords(addressToSearch);
+              lat = fallbackCoords.lat;
+              lng = fallbackCoords.lng;
+            }
+          } else {
+            const fallbackCoords = getLocalFallbackCoords(addressToSearch);
+            lat = fallbackCoords.lat;
+            lng = fallbackCoords.lng;
+          }
+        }
+
+        const created: Property = {
+          id: targetId,
+          propertyNo: propertyNoFromPayload,
+          floorNow: floorNowFromPayload,
+          floorTotal: floorTotalFromPayload,
+          name: String(rawData.name || "스프레드시트 연동 매물").trim(),
+          category: category as any,
+          transactionType: transactionType as any,
+          priceText: priceText || '가격 협의',
+          priceValue: Number(rawData.priceValue) || 1000,
+          rentValue: rawData.rentValue ? Number(rawData.rentValue) : undefined,
+          pyongValue: pyong,
+          floorText: compiledFloorText,
+          direction: String(rawData.direction || "남향"),
+          location: String(rawData.location || "부산광역시 부산진구 냉정로 일대"),
+          useYearText: String(rawData.useYearText || `${useYear}년 준공`),
+          useYearValue: useYear,
+          householdsCount: Number(rawData.householdsCount) || 150,
+          imageUrl: String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80"),
+          tags: Array.isArray(rawData.tags)
+            ? rawData.tags
+            : (rawData.tags && typeof rawData.tags === 'string' ? rawData.tags.split(',').map((s: string) => s.trim()) : ["실시간연동", "추천매물"]),
+          description: String(rawData.description || "구글 스프레드시트에서 실시간 자동 연동된 안전성이 검증된 매물입니다."),
+          features: [
+            '중개사 책임 실사 완료 특급 상태',
+            '인근 대중교통 이용 최상 인프라 권역',
+            '채광 우수 및 공실 협시 즉시 입주',
+            '부강공인중개사 소장 전속 권장'
+          ],
+          latitude: lat,
+          longitude: lng,
+          mapLat: lat,
+          mapLng: lng,
+          fullAddr: addressToSearch,
+          area: String(rawData.area || `${pyong}평 (전용 약 ${Math.floor(pyong * 3.3)}㎡)`),
+          floor: compiledFloor,
+          dir: String(rawData.dir || rawData.direction || "남향"),
+          avail: String(rawData.avail || "즉시 입주 및 협의가능"),
+          rooms: String(rawData.rooms || "방 3개 / 욕실 2개"),
+          date: String(rawData.date || `${useYear}.01.01`),
+          parking: String(rawData.parking || "세대당 1.2대 수준"),
+          mFee: String(rawData.mFee || "약 15만원"),
+          note: String(rawData.note || rawData.description || "구글 스프레드시트 실시간 동기화 매물"),
+          priceHTML: priceHTMLText,
+          type: String(rawData.type || category),
+          trade: String(rawData.trade || transactionType),
+          isFromSheets: true
+        };
+
+        try {
+          await setDoc(doc(db, 'properties', targetId), created);
+          
+          triggerNotification(`🎉 [전산 실시간 동기화 완료] 스프레드시트 매물 "${created.name}"이(가) 즉시 DB에 자동 등록되었습니다!`);
+          
+          // Focus view on the updated/created listing
+          setActiveMarkerId(targetId);
+          setMapCenter({ lat, lng });
+          setViewMode('map');
+          
+          // Disable admin creation overlay to avoid blockages
+          setIsAdminMode(false);
+          setShowAddForm(false);
+          
+          // Sync newProp state so references are consistent
+          setNewProp({
+            propertyNo: propertyNoFromPayload,
+            floorNow: floorNowFromPayload,
+            floorTotal: floorTotalFromPayload,
+            name: created.name,
+            category: category,
+            transactionType: transactionType,
+            priceText: priceText,
+            priceValue: String(created.priceValue),
+            rentValue: created.rentValue !== undefined ? String(created.rentValue) : '',
+            pyongValue: String(pyong),
+            floorText: compiledFloorText,
+            direction: created.direction,
+            location: created.location,
+            useYearText: created.useYearText,
+            useYearValue: String(useYear),
+            householdsCount: String(created.householdsCount),
+            imageUrl: created.imageUrl,
+            tags: created.tags.join(', '),
+            description: created.description,
+            note: created.note || '',
+            fullAddr: created.fullAddr,
+            area: created.area || '',
+            floor: created.floor || '',
+            dir: created.dir || '',
+            avail: created.avail || '',
+            rooms: created.rooms || '',
+            date: created.date || '',
+            parking: created.parking || '',
+            mFee: created.mFee || '',
+            priceHTML: created.priceHTML || '',
+            type: created.type || '',
+            trade: created.trade || '',
+            mapLat: String(lat),
+            mapLng: String(lng)
+          });
+        } catch (dbErr) {
+          console.error("[Firestore Auto-sync Error]", dbErr);
+          triggerNotification('❌ 스프레드시트 매물의 실시간 자동 DB등록 중 오류가 발생했습니다.');
+        }
+      };
+
+      resolveAndSave();
 
       return { success: true, name: rawData.name };
     } catch (error) {
@@ -1106,9 +1251,21 @@ export default function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const importDataStr = urlParams.get('importData');
       if (importDataStr) {
-        const decoded = JSON.parse(decodeURIComponent(importDataStr));
+        let decoded: any = null;
+        try {
+          // Attempt 1: First parse immediately because URLSearchParams already decodes it once
+          decoded = JSON.parse(importDataStr);
+        } catch (e1) {
+          try {
+            // Attempt 2: If fail, decode manually (in case of double URL encode)
+            decoded = JSON.parse(decodeURIComponent(importDataStr));
+          } catch (e2) {
+            console.error("[Sheets URL Importer] Error parsing string as JSON", e2);
+          }
+        }
+
         if (decoded && typeof decoded === 'object') {
-          console.log("[Sheets URL Importer] Loading property data from active URL query params...");
+          console.log("[Sheets URL Importer] Loading property data from active URL query params...", decoded);
           handleAddPropertyFromSheets(decoded);
           // Safely purge raw secret parameters from status bar without reload to prevent re-triggers
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -6658,7 +6815,9 @@ export default function App() {
                               {isRealtime && <Sparkles className="w-3 h-3 animate-pulse" />}
                               <span>B2B 공동중개 원장조회</span>
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">ID: {activeProp.id.substring(0, 10)}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {activeProp.propertyNo ? `매물번호: ${activeProp.propertyNo}` : `ID: ${activeProp.id.substring(0, 10)}`}
+                            </span>
                           </div>
 
                           <div className="flex gap-3">
