@@ -15,14 +15,26 @@ import fs from "fs";
 
 let db: any = null;
 try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
+  const possiblePaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    "/firebase-applet-config.json"
+  ];
+  let configPath = "";
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      configPath = p;
+      break;
+    }
+  }
+  if (configPath) {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     const firebaseApp = initializeApp(firebaseConfig);
     db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-    console.log("🔥 [Server Firebase] Successfully initialized Firestore connection in Express backend.");
+    console.log(`🔥 [Server Firebase] Successfully initialized Firestore connection from path: ${configPath}`);
   } else {
-    console.warn("⚠️ [Server Firebase] Config file firebase-applet-config.json not found.");
+    console.warn("⚠️ [Server Firebase] Config file firebase-applet-config.json not found in any standard routes.");
   }
 } catch (err) {
   console.error("❌ [Server Firebase] Initialization error:", err);
@@ -32,6 +44,15 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Defensive middleware to normalize double/consecutive slashes in incoming request paths (e.g., //api/properties -> /api/properties)
+app.use((req, res, next) => {
+  const cleanPath = req.path.replace(/\/\/+/g, '/');
+  if (req.path !== cleanPath) {
+    req.url = cleanPath + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '');
+  }
+  next();
+});
 
 // Enable CORS for API routes so third-party senders don't get blocked
 app.use((req, res, next) => {
@@ -351,27 +372,58 @@ app.post("/api/properties", async (req, res) => {
       imageUrl
     };
 
+    // Recursive sanitizer for firestore fields on the server to prevent undefined and NaN errors
+    const sanitizeForFirestore = (obj: any): any => {
+      const clean: any = {};
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if (val === undefined) {
+          continue;
+        }
+        if (typeof val === 'number') {
+          if (Number.isNaN(val)) {
+            if (key === 'latitude' || key === 'mapLat') clean[key] = 35.151261;
+            else if (key === 'longitude' || key === 'mapLng') clean[key] = 129.029706;
+            else clean[key] = 0;
+          } else {
+            clean[key] = val;
+          }
+        } else if (Array.isArray(val)) {
+          clean[key] = val.filter((item: any) => item !== undefined && item !== null);
+        } else if (val !== null && typeof val === 'object') {
+          clean[key] = sanitizeForFirestore(val);
+        } else {
+          clean[key] = val;
+        }
+      }
+      return clean;
+    };
+
+    const sanitizedProperty = sanitizeForFirestore(normalizedProperty);
+
     if (!db) {
       throw new Error("Firestore cloud database is not initialized on this server session.");
     }
 
     // Save directly to the properties database in Firestore!
     const docRef = doc(db, 'properties', id);
-    await setDoc(docRef, normalizedProperty);
+    await setDoc(docRef, sanitizedProperty);
 
     console.log(`✅ [GAS POST API] Successfully saved property to Firestore: ${id} (${name})`);
     
     return res.status(200).json({
       success: true,
       message: "새 매물이 성공적으로 중앙 실시간 데이터베이스(Firestore)에 등록 완료되었습니다.",
-      property: normalizedProperty
+      property: sanitizedProperty
     });
 
   } catch (err: any) {
     console.error("❌ [GAS POST API] Error processing payload:", err);
     return res.status(500).json({
       success: false,
-      error: err?.message || "Internal server error during property insertion."
+      error: err?.message || "Internal server error during property insertion.",
+      details: String(err),
+      stack: err?.stack || ""
     });
   }
 });

@@ -962,7 +962,7 @@ export default function App() {
         const q = addr.toLowerCase();
         if (q.includes('냉정로 273') || q.includes('부강')) {
           fLat = 35.151261;
-          fLng = 1129.029706;
+          fLng = 129.029706;
         } else if (q.includes('현대아파트') || q.includes('현대 아이파크') || q.includes('현대아이파크')) {
           fLat = 35.151261;
           fLng = 129.029706;
@@ -1068,8 +1068,37 @@ export default function App() {
           isFromSheets: true
         };
 
+        // Sanitize object to remove undefined properties and convert NaN to safe fallbacks before saving to Firestore
+        const sanitizeForFirestore = (obj: any): any => {
+          const clean: any = {};
+          for (const key of Object.keys(obj)) {
+            const val = obj[key];
+            if (val === undefined) {
+              continue;
+            }
+            if (typeof val === 'number') {
+              if (Number.isNaN(val)) {
+                if (key === 'latitude' || key === 'mapLat') clean[key] = 35.151261;
+                else if (key === 'longitude' || key === 'mapLng') clean[key] = 129.029706;
+                else clean[key] = 0;
+              } else {
+                clean[key] = val;
+              }
+            } else if (Array.isArray(val)) {
+              clean[key] = val.filter((item: any) => item !== undefined && item !== null);
+            } else if (val !== null && typeof val === 'object') {
+              clean[key] = sanitizeForFirestore(val);
+            } else {
+              clean[key] = val;
+            }
+          }
+          return clean;
+        };
+
+        const sanitizedCreated = sanitizeForFirestore(created);
+
         try {
-          await setDoc(doc(db, 'properties', targetId), created);
+          await setDoc(doc(db, 'properties', targetId), sanitizedCreated);
           
           triggerNotification(`🎉 [전산 실시간 동기화 완료] 스프레드시트 매물 "${created.name}"이(가) 즉시 DB에 자동 등록되었습니다!`);
           
@@ -1078,8 +1107,8 @@ export default function App() {
           setMapCenter({ lat, lng });
           setViewMode('map');
           
-          // Disable admin creation overlay to avoid blockages
-          setIsAdminMode(false);
+          // Enable Administrator Mode so the user can see admin controls and edit/delete properties immediately
+          setIsAdminMode(true);
           setShowAddForm(false);
           
           // Sync newProp state so references are consistent
@@ -1119,19 +1148,21 @@ export default function App() {
             mapLat: String(lat),
             mapLng: String(lng)
           });
-        } catch (dbErr) {
+        } catch (dbErr: any) {
           console.error("[Firestore Auto-sync Error]", dbErr);
-          triggerNotification('❌ 스프레드시트 매물의 실시간 자동 DB등록 중 오류가 발생했습니다.');
+          const errorMsg = dbErr?.message || String(dbErr);
+          triggerNotification(`❌ 스프레드시트 매물의 실시간 자동 DB등록 중 오류가 발생했습니다: ${errorMsg}`);
         }
       };
 
       resolveAndSave();
 
       return { success: true, name: rawData.name };
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Sheets Integration Error]", error);
-      triggerNotification("❌ 스프레드시트 매물 데이터 불러오기 중 전산오류가 발생했습니다.");
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      triggerNotification(`❌ 스프레드시트 매물 데이터 불러오기 중 전산오류가 발생했습니다: ${errorMsg}`);
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -1249,6 +1280,13 @@ export default function App() {
   useEffect(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      
+      // Auto-enable Administrator Mode if ?admin=true is passed
+      if (urlParams.get('admin') === 'true') {
+        setIsAdminMode(true);
+        triggerNotification('🔑 구글 스프레드시트 연동 승인으로 관리자 모드가 자동 활성화되었습니다.');
+      }
+
       const importDataStr = urlParams.get('importData');
       if (importDataStr) {
         let decoded: any = null;
@@ -1275,6 +1313,34 @@ export default function App() {
       console.error("[Sheets URL Importer Exception]", e);
     }
   }, []);
+
+  // Autofocus/highlight property on map if ?highlight=<id> is provided
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const highlightId = urlParams.get('highlight');
+      if (highlightId && properties.length > 0) {
+        const found = properties.find(p => p.id === highlightId || p.propertyNo === highlightId);
+        if (found) {
+          const lat = found.mapLat || found.latitude || 35.151261;
+          const lng = found.mapLng || found.longitude || 129.029706;
+          setActiveMarkerId(found.id);
+          setMapCenter({ lat, lng });
+          setViewMode('map');
+          triggerNotification(`🎯 등록된 새 매물 "${found.name}"의 위치로 지도가 이동되었습니다!`);
+          
+          // Clear highlight from URL to avoid repeating on manual navigation
+          const cleanSearch = new URLSearchParams(window.location.search);
+          cleanSearch.delete('highlight');
+          const finalSearch = cleanSearch.toString();
+          const cleanUrl = window.location.pathname + (finalSearch ? `?${finalSearch}` : '');
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }
+    } catch (e) {
+      console.error("[Highlight Importer Exception]", e);
+    }
+  }, [properties]);
 
   const [syncCount, setSyncCount] = useState<number>(0);
 
