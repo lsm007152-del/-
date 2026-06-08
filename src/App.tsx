@@ -13,6 +13,9 @@ import {
   TrendingUp, 
   Check, 
   Heart,
+  Upload,
+  Link,
+  Image,
   Star,
   Menu, 
   Info, 
@@ -169,6 +172,7 @@ export interface Property {
   isFromSheets?: boolean;
   
   imageUrl: string;
+  imageUrls?: string[];
   latitude?: number;
   longitude?: number;
   mapLat: number;
@@ -207,7 +211,7 @@ const INITIAL_PROPERTIES: Property[] = [
     name: '서면 삼정그린코아 더시티',
     category: '오피스텔',
     transactionType: '월세',
-    priceText: '보증금 1,000 / 월 65만',
+    priceText: '보증금 1,000만 원 / 월세 65만 원',
     priceValue: 1000,
     rentValue: 65,
     pyongValue: 12,
@@ -271,7 +275,7 @@ const INITIAL_PROPERTIES: Property[] = [
     name: '범천동 메리움 상가 상가',
     category: '상가',
     transactionType: '월세',
-    priceText: '보증금 3,000 / 월 150만',
+    priceText: '보증금 3,000만 원 / 월세 150만 원',
     priceValue: 3000,
     rentValue: 150,
     pyongValue: 18,
@@ -404,7 +408,7 @@ const PropertyDetailTable = ({ data }: { data: Property }) => (
         {[
           { label: '1. 소재지', val: data.fullAddr || data.location },
           { label: '2. 면적', val: data.area || `${data.pyongValue}평 (전용 약 ${Math.floor(data.pyongValue * 3.3)}㎡)` },
-          { label: '3. 가격', val: `${data.transactionType} ${getCleanedPriceText(data.transactionType, data.priceText)}` },
+          { label: '3. 가격', val: getPropertyPriceDisplay(data) },
           { label: '4. 중개대상물 종류', val: data.type || data.category },
           { label: '5. 거래형태', val: data.trade || data.transactionType },
           { label: '6. 층수/총층수', val: data.floor || data.floorText },
@@ -430,12 +434,184 @@ const PropertyDetailTable = ({ data }: { data: Property }) => (
   </div>
 );
 
+const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
+
+const resolveDriveImageUrl = (url: string): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  
+  // Detect if it is a Google Drive Folder link
+  if (trimmed.includes('drive.google.com/drive/folders/') || 
+      (trimmed.includes('drive.google.com/drive/u/') && trimmed.includes('/folders/'))) {
+    return 'FOLDER_URL_DETECTED';
+  }
+  
+  // Format check for already resolved/embedded direct links
+  if (trimmed.includes('drive.google.com/uc?export=view&id=')) {
+    return trimmed;
+  }
+  
+  let fileId = '';
+  
+  // Pattern 1: /file/d/FILE_ID
+  const fileDMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileDMatch && fileDMatch[1]) {
+    fileId = fileDMatch[1];
+  } else {
+    // Pattern 2: id=FILE_ID
+    const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idParamMatch && idParamMatch[1]) {
+      if (!trimmed.includes('folders/')) {
+        fileId = idParamMatch[1];
+      }
+    } else {
+      // Pattern 3: lh3.googleusercontent.com/d/FILE_ID
+      const lhMatch = trimmed.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+      if (lhMatch && lhMatch[1]) {
+        fileId = lhMatch[1];
+      } else {
+        // Pattern 4: /uc?id=FILE_ID or similar formats
+        const ucMatch = trimmed.match(/drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/);
+        if (ucMatch && ucMatch[1]) {
+          fileId = ucMatch[1];
+        }
+      }
+    }
+  }
+  
+  if (fileId) {
+    // Standard direct link form requested: drive.google.com/uc?export=view&id=FILE_ID as requested
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+  
+  return trimmed;
+};
+
+// Helper: compress local image client-side to keep Firestore document under 1MB limits
+const compressAndConvertImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // Safety Timeout: If image resizing async task hangs beyond 2.5 seconds due to sandboxing or canvas issues, 
+    // fall back to the original reader Base64 payload instead of freezing the UI.
+    let isSettled = false;
+    let fallbackBase64 = '';
+
+    const forceFallback = () => {
+      if (!isSettled) {
+        isSettled = true;
+        if (fallbackBase64) {
+          console.warn('⚠️ Image compression timed out. Falling back to original resolution.');
+          resolve(fallbackBase64);
+        } else {
+          reject(new Error('이미지 처리 시간 초과 및 변환 실패'));
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(forceFallback, 2500);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const resultStr = event.target?.result as string;
+        fallbackBase64 = resultStr;
+
+        const img = document.createElement('img');
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 800; // Optimal display size for listing cards
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+              if (!isSettled) {
+                isSettled = true;
+                clearTimeout(timeoutId);
+                resolve(compressedBase64);
+              }
+            } else {
+              if (!isSettled) {
+                isSettled = true;
+                clearTimeout(timeoutId);
+                resolve(resultStr);
+              }
+            }
+          } catch (e) {
+            console.error('Canvas resize failed, returning original base64:', e);
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timeoutId);
+              resolve(resultStr);
+            }
+          }
+        };
+
+        img.onerror = (err) => {
+          console.warn('Image loading error, falling back to original base64:', err);
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timeoutId);
+            resolve(resultStr);
+          }
+        };
+
+        img.src = resultStr;
+      } catch (err) {
+        console.error('FileReader onload error:', err);
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeoutId);
+          reject(err);
+        }
+      }
+    };
+
+    reader.onerror = (err) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timeoutId);
+        reject(new Error('파일 읽기 오류가 발생했습니다.'));
+      }
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
 // Helper function to remove redundant "보증금" text for 월세 transactions
 const getCleanedPriceText = (transactionType: string, priceText: any) => {
   if (priceText === undefined || priceText === null) return '';
-  const str = String(priceText);
+  let str = String(priceText).trim();
+  
   if (transactionType === '월세') {
     return str.replace(/보증금\s*/g, '').trim();
+  } else {
+    // For 매매/전세, remove starting prefix of transactionType if exists (e.g. "전세 " or "매매 ")
+    if (str.startsWith(transactionType)) {
+      str = str.substring(transactionType.length).trim();
+    }
+  }
+
+  // Ensure "원" is appended at the end for 매매/전세
+  if (str && !str.endsWith('원') && !str.toLowerCase().includes('협의') && !str.includes('미정') && !str.includes('전화문의')) {
+    str = `${str} 원`;
   }
   return str;
 };
@@ -448,11 +624,170 @@ const formatPriceValue = (value: number) => {
     if (remainder === 0) {
       return `${eok}억`;
     } else {
-      const decimal = (remainder / 1000).toFixed(1).replace('.0', '');
-      return `${eok}.${decimal}억`;
+      const decimalStr = (remainder / 10000).toFixed(2).replace(/0+$/, '');
+      const decimalPart = decimalStr.split('.')[1] || '';
+      return `${eok}.${decimalPart}억`;
     }
   }
   return `${value.toLocaleString()}만`;
+};
+
+const formatPriceToKorean = (valInManWon: number | string): string => {
+  const num = Number(valInManWon);
+  if (!num || isNaN(num)) return '';
+  if (num >= 10000) {
+    const eok = Math.floor(num / 10000);
+    const man = num % 10000;
+    if (man === 0) {
+      return `${eok}억`;
+    }
+    return `${eok}억 ${man.toLocaleString()}만`;
+  }
+  return `${num.toLocaleString()}만`;
+};
+
+const getPropertyPriceDisplay = (prop: { transactionType: string; priceText: string; priceValue?: number; rentValue?: number }) => {
+  if (prop.transactionType === '월세') {
+    const depositVal = Number(prop.priceValue) || 0;
+    const rentVal = Number(prop.rentValue) || 0;
+
+    if (depositVal > 0 || rentVal > 0) {
+      const depositStr = depositVal > 0 ? formatPriceToKorean(depositVal).trim() : '0';
+      const rentStr = rentVal > 0 ? `${rentVal.toLocaleString()}만` : '0만';
+      return `보증금 ${depositStr} 원 / 월세 ${rentStr} 원`;
+    }
+
+    // Fallback parsing from raw text if numeric fields are missing
+    let cleanText = String(prop.priceText || '').trim();
+    if (cleanText.includes('/')) {
+      const parts = cleanText.split('/');
+      let depPart = parts[0].replace(/보증금\s*/g, '').trim();
+      let rentPart = parts[1].replace(/월세|월\s*세|월/g, '').trim();
+      
+      // Clean up standalone thousands to "천" or convert to Korean
+      if (/^\d+$/.test(depPart)) {
+        const num = Number(depPart);
+        if (num < 10000) {
+          depPart = `${num.toLocaleString()}만`;
+        } else {
+          depPart = formatPriceToKorean(num);
+        }
+      }
+      if (/^\d+$/.test(rentPart)) {
+        rentPart = `${Number(rentPart).toLocaleString()}만`;
+      }
+      
+      const depUnit = depPart.endsWith('원') ? '' : ' 원';
+      const rentUnit = rentPart.endsWith('원') ? '' : ' 원';
+      return `보증금 ${depPart}${depUnit} / 월세 ${rentPart}${rentUnit}`;
+    }
+    
+    return prop.priceText || '가격 협의';
+  }
+
+  // 매매/전세
+  return `${prop.transactionType} ${getCleanedPriceText(prop.transactionType, prop.priceText)}`;
+};
+
+const parseAreaFields = (areaStr: string, pyongValue: string | number) => {
+  let exM2 = '';
+  let spM2 = '';
+  let exPy = '';
+  let spPy = '';
+  
+  if (areaStr) {
+    const cleanStr = String(areaStr).replace(/,/g, '');
+    
+    // Check for "공급 112㎡ / 전용 84㎡"
+    const spMatch = cleanStr.match(/(?:공급|계약|분양)[^\d\.]*([\d.]+)/i);
+    const exMatch = cleanStr.match(/(?:전용|실평|실|전용면적)[^\d\.]*([\d.]+)/i);
+    
+    if (spMatch) {
+      spM2 = spMatch[1];
+      const parsedSp = parseFloat(spM2);
+      if (!isNaN(parsedSp)) {
+        spM2 = parsedSp.toFixed(2);
+      }
+      spPy = (Number(spM2) * 0.3025).toFixed(2);
+    }
+    if (exMatch) {
+      exM2 = exMatch[1];
+      const parsedEx = parseFloat(exM2);
+      if (!isNaN(parsedEx)) {
+        exM2 = parsedEx.toFixed(2);
+      }
+      exPy = (Number(exM2) * 0.3025).toFixed(2);
+    }
+    
+    // If no explicit tags but contains slashes or numbers
+    if (!spM2 && !exM2) {
+      const numbers = cleanStr.match(/([\d.]+)/g);
+      if (numbers && numbers.length >= 2) {
+        spM2 = parseFloat(numbers[0]).toFixed(2);
+        spPy = (Number(spM2) * 0.3025).toFixed(2);
+        exM2 = parseFloat(numbers[1]).toFixed(2);
+        exPy = (Number(exM2) * 0.3025).toFixed(2);
+      } else if (numbers && numbers.length === 1) {
+        exM2 = parseFloat(numbers[0]).toFixed(2);
+        exPy = (Number(exM2) * 0.3025).toFixed(2);
+      }
+    }
+  }
+  
+  if (!spPy && pyongValue) {
+    spPy = parseFloat(String(pyongValue)).toFixed(2);
+    spM2 = (Number(pyongValue) / 0.3025).toFixed(2);
+  }
+  if (!exPy && spPy) {
+    const estimatedExPy = (Number(spPy) * 0.73).toFixed(2);
+    exPy = estimatedExPy;
+    exM2 = (Number(estimatedExPy) / 0.3025).toFixed(2);
+  }
+  
+  return { exM2, spM2, exPy, spPy };
+};
+
+const parseRoomFields = (roomsStr: string) => {
+  let roomCount = '';
+  let bathCount = '';
+  if (roomsStr) {
+    const rMatch = roomsStr.match(/방\s*(\d+)/);
+    const bMatch = roomsStr.match(/욕실\s*(\d+)/);
+    if (rMatch) roomCount = rMatch[1];
+    if (bMatch) bathCount = bMatch[1];
+    
+    if (!roomCount && !bathCount) {
+      const nums = roomsStr.match(/\d+/g);
+      if (nums && nums.length >= 2) {
+        roomCount = nums[0];
+        bathCount = nums[1];
+      } else if (nums && nums.length === 1) {
+        roomCount = nums[0];
+      }
+    }
+  }
+  return { roomCount, bathCount };
+};
+
+const parseDirFields = (dirStr: string, directionFallback: string) => {
+  let direction = directionFallback || '남향';
+  let dirStandard = '거실 기준';
+  if (dirStr) {
+    const stdMatch = dirStr.match(/\(([^)]+)\)/);
+    if (stdMatch) {
+      dirStandard = stdMatch[1];
+      direction = dirStr.replace(/\([^)]+\)/, '').trim();
+    } else {
+      direction = dirStr;
+    }
+  }
+  return { direction, dirStandard };
+};
+
+const extractYear = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const match = dateStr.match(/\b(19\d\d|20\d\d)\b/);
+  return match ? match[1] : '';
 };
 
 const getGroupSummaries = (properties: Property[]) => {
@@ -509,7 +844,7 @@ export default function App() {
   
   // Tab states
   const [activeTab, setActiveTab] = useState<ActiveTabType>('매물검색');
-  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('아파트');
+  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('전체');
 
   // Filter conditions
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionType>('전체');
@@ -539,9 +874,9 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('map');
   
   // Region Selector states matching user's custom images
-  const [selectedSido, setSelectedSido] = useState<string>('부산시');
-  const [selectedSigungu, setSelectedSigungu] = useState<string>('부산진구');
-  const [selectedEupmyeondong, setSelectedEupmyeondong] = useState<string>('가야동');
+  const [selectedSido, setSelectedSido] = useState<string>('전체');
+  const [selectedSigungu, setSelectedSigungu] = useState<string>('전체');
+  const [selectedEupmyeondong, setSelectedEupmyeondong] = useState<string>('전체');
   const [activeRegionStep, setActiveRegionStep] = useState<'sido' | 'sigungu' | 'dong'>('sido');
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState<boolean>(false);
 
@@ -675,6 +1010,11 @@ export default function App() {
   
   // Detail Modal Controls
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [detailImageIndex, setDetailImageIndex] = useState<number>(0);
+
+  useEffect(() => {
+    setDetailImageIndex(0);
+  }, [selectedProperty?.id]);
   
   // Saved Favorites Persistence
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -697,7 +1037,7 @@ export default function App() {
   const [isConsultSubmitted, setIsConsultSubmitted] = useState<boolean>(false);
 
   // Active sub-pills for sub categories inside Naver style filters
-  const [activeSubPills, setActiveSubPills] = useState<string[]>(['아파트']);
+  const [activeSubPills, setActiveSubPills] = useState<string[]>(['전체']);
 
   // --- Deletion and Notification Iframe-Safe States ---
   const [deletePropertyId, setDeletePropertyId] = useState<string | null>(null);
@@ -740,6 +1080,11 @@ export default function App() {
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   
+  // Image registration modes: 'drive' for pasting google drive/web links, 'upload' for local files compressed safely
+  const [uploadTab, setUploadTab] = useState<'upload' | 'drive'>('drive');
+  const [isUploadingLocal, setIsUploadingLocal] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  
   const [newProp, setNewProp] = useState({
     propertyNo: '',
     floorNow: '',
@@ -750,28 +1095,40 @@ export default function App() {
     priceText: '',
     priceValue: '',
     rentValue: '',
+    priceValueSale: '',
+    priceValueJeonse: '',
+    priceValueRentDeposit: '',
+    rentValueRentMonth: '',
     pyongValue: '',
     floorText: '',
     direction: '남향',
+    dirStandard: '거실 기준',
     location: '',
     useYearText: '',
     useYearValue: '',
     householdsCount: '',
     imageUrl: '',
+    imageUrls: [] as string[],
     tags: '',
     description: '',
     note: '',
     fullAddr: '',
     area: '',
+    areaExM2: '',
+    areaSpM2: '',
+    areaExPy: '',
+    areaSpPy: '',
     floor: '',
     dir: '',
     avail: '',
+    roomCount: '',
+    bathCount: '',
     rooms: '',
     date: '',
     parking: '',
     mFee: '',
     priceHTML: '',
-    type: '',
+    type: '아파트',
     trade: '',
     mapLat: '',
     mapLng: ''
@@ -933,10 +1290,10 @@ export default function App() {
       };
 
       // Clean category to match acceptable system enums correctly
-      const categoryFromPayload = String(getVal(categoryKeys, "아파트")).trim();
-      const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지", "아파트 오피스텔"].includes(categoryFromPayload)
+      const categoryFromPayload = String(getVal(categoryKeys, "")).trim();
+      const category = ["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(categoryFromPayload)
         ? categoryFromPayload
-        : "아파트";
+        : "";
 
       const transactionTypeFromPayload = String(getVal(transactionTypeKeys, "매매")).trim();
       const transactionType = ["매매", "전세", "월세"].includes(transactionTypeFromPayload)
@@ -1031,20 +1388,25 @@ export default function App() {
           lat = Number(rawData.mapLat);
           lng = Number(rawData.mapLng);
         } else {
-          // Attempt Kakao geocoding
+          // Attempt Kakao geocoding with defensive guards and timeout
           const anyWin = window as any;
-          if (anyWin.kakao && anyWin.kakao.maps && anyWin.kakao.maps.services) {
+          const cleanAddr = addressToSearch ? addressToSearch.trim() : '';
+          
+          if (cleanAddr && cleanAddr !== "부산광역시 부산진구 냉정로 일대" && anyWin.kakao && anyWin.kakao.maps && anyWin.kakao.maps.services) {
             try {
               const geocoder = new anyWin.kakao.maps.services.Geocoder();
-              const coordResult = await new Promise<{lat: number, lng: number} | null>((resolve) => {
-                geocoder.addressSearch(addressToSearch, (result: any[], status: string) => {
-                  if (status === anyWin.kakao.maps.services.Status.OK && result && result.length > 0) {
-                    resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
-                  } else {
-                    resolve(null);
-                  }
-                });
-              });
+              const coordResult = await Promise.race([
+                new Promise<{lat: number, lng: number} | null>((resolve) => {
+                  geocoder.addressSearch(cleanAddr, (result: any[], status: string) => {
+                    if (status === anyWin.kakao.maps.services.Status.OK && result && result.length > 0) {
+                      resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
+                    } else {
+                      resolve(null);
+                    }
+                  });
+                }),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)) // 1.5-second fallback timeout guard
+              ]);
               if (coordResult) {
                 lat = coordResult.lat;
                 lng = coordResult.lng;
@@ -1083,7 +1445,20 @@ export default function App() {
           useYearText: String(getVal(['useYearText', '연식', '준공일'], `${useYear}년 준공`)),
           useYearValue: useYear,
           householdsCount: Number(getVal(['householdsCount', '세대수'], 150)),
-          imageUrl: String(getVal(imageKeys, "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80")),
+          imageUrls: Array.isArray(rawData.imageUrls)
+            ? rawData.imageUrls.map((url: string) => resolveDriveImageUrl(url))
+            : (getVal(['imageUrls', '사진들', '이미지들', '추가사진', '사진첩', 'subImages'], '')
+               ? String(getVal(['imageUrls', '사진들', '이미지들', '추가사진', '사진첩', 'subImages'], '')).split(',').map((s: string) => resolveDriveImageUrl(s.trim()))
+               : (rawData.imageUrl ? [resolveDriveImageUrl(rawData.imageUrl)] : [])),
+          imageUrl: (() => {
+            const possibleUrls = Array.isArray(rawData.imageUrls) ? rawData.imageUrls : [];
+            const firstOfUrls = possibleUrls.length > 0 ? resolveDriveImageUrl(possibleUrls[0]) : '';
+            if (firstOfUrls && firstOfUrls !== 'FOLDER_URL_DETECTED') {
+              return firstOfUrls;
+            }
+            const basicUrl = getVal(imageKeys, '');
+            return basicUrl ? resolveDriveImageUrl(String(basicUrl)) : "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80";
+          })(),
           tags: Array.isArray(rawData.tags)
             ? rawData.tags
             : (getVal(['tags'], '') ? String(getVal(['tags'], '')).split(',').map((s: string) => s.trim()) : ["실시간연동", "추천매물"]),
@@ -1141,52 +1516,70 @@ export default function App() {
           return clean;
         };
 
-        const sanitizedCreated = sanitizeForFirestore(created);
-
         try {
           // Enable Administrator Mode so the user can see admin controls and edit/delete properties immediately
           setIsAdminMode(true);
           setShowAddForm(true);
-          
+
           // Focus view on the geocoded coordinates, but let the user review and hit submit manually
           setMapCenter({ lat, lng });
           setViewMode('map');
-          
-          triggerNotification(`📥 [스프레드시트 전산 연동] 매물 "${created.name}"의 모든 정보가 아래 등록 창에 임시 기입되었습니다! 검토 후 최하단 오렌지색 등록하기 버튼을 클릭하십시오.`);
-          
-          // Sync newProp state so references are consistent
+
+          triggerNotification(`📥 [스프레드시트 전산 연동] 매물 "${created.name}"의 모든 정보가 등록 창에 임시 기입되었습니다! 검토 후 등록하기 버튼을 완료해 주십시오.`);
+
+          // Pre-fill the form (newProp state) with robust parsed fields
+          const { exM2, spM2, exPy, spPy } = parseAreaFields(created.area || '', created.pyongValue || '');
+          const { roomCount, bathCount } = parseRoomFields(created.rooms || '');
+          const { direction: parsedDirection, dirStandard: parsedDirStandard } = parseDirFields(created.dir || created.direction || '', created.direction || '남향');
+
           setNewProp({
             propertyNo: propertyNoFromPayload,
             floorNow: floorNowFromPayload,
             floorTotal: floorTotalFromPayload,
             name: created.name,
-            category: category,
-            transactionType: transactionType,
+            category: category as any,
+            transactionType: transactionType as any,
             priceText: priceText,
             priceValue: String(created.priceValue),
             rentValue: created.rentValue !== undefined ? String(created.rentValue) : '',
+            priceValueSale: rawData.priceValueSale !== undefined ? String(rawData.priceValueSale) : ((transactionType || created.transactionType) === '매매' ? String(created.priceValue) : ''),
+            priceValueJeonse: rawData.priceValueJeonse !== undefined ? String(rawData.priceValueJeonse) : ((transactionType || created.transactionType) === '전세' ? String(created.priceValue) : ''),
+            priceValueRentDeposit: rawData.priceValueRentDeposit !== undefined ? String(rawData.priceValueRentDeposit) : ((transactionType || created.transactionType) === '월세' ? String(created.priceValue) : ''),
+            rentValueRentMonth: rawData.rentValueRentMonth !== undefined ? String(rawData.rentValueRentMonth) : ((transactionType || created.transactionType) === '월세' ? (created.rentValue !== undefined ? String(created.rentValue) : '') : ''),
             pyongValue: String(pyong),
             floorText: compiledFloorText,
-            direction: created.direction,
-            location: created.location,
+            direction: parsedDirection,
+            dirStandard: parsedDirStandard,
+            location: addressToSearch,
             useYearText: created.useYearText,
             useYearValue: String(useYear),
             householdsCount: String(created.householdsCount),
-            imageUrl: created.imageUrl,
+            imageUrl: (created.imageUrls && created.imageUrls.length > 0)
+              ? resolveDriveImageUrl(created.imageUrls[0])
+              : resolveDriveImageUrl(created.imageUrl),
+            imageUrls: (created.imageUrls && created.imageUrls.length > 0)
+              ? created.imageUrls
+              : (created.imageUrl ? [resolveDriveImageUrl(created.imageUrl)] : []),
             tags: created.tags.join(', '),
             description: created.description,
             note: created.note || '',
             fullAddr: created.fullAddr,
             area: created.area || '',
+            areaExM2: rawData.areaExM2 !== undefined ? String(rawData.areaExM2) : exM2,
+            areaSpM2: rawData.areaSpM2 !== undefined ? String(rawData.areaSpM2) : spM2,
+            areaExPy: rawData.areaExPy !== undefined ? String(rawData.areaExPy) : exPy,
+            areaSpPy: rawData.areaSpPy !== undefined ? String(rawData.areaSpPy) : spPy,
             floor: created.floor || '',
             dir: created.dir || '',
-            avail: created.avail || '',
+            avail: rawData.avail !== undefined ? String(rawData.avail) : (created.avail || ''),
+            roomCount: rawData.roomCount !== undefined ? String(rawData.roomCount) : roomCount,
+            bathCount: rawData.bathCount !== undefined ? String(rawData.bathCount) : bathCount,
             rooms: created.rooms || '',
-            date: created.date || '',
+            date: rawData.date !== undefined ? String(rawData.date) : (created.date || ''),
             parking: created.parking || '',
             mFee: created.mFee || '',
             priceHTML: created.priceHTML || '',
-            type: created.type || '',
+            type: created.type || category || '아파트',
             trade: created.trade || '',
             mapLat: String(lat),
             mapLng: String(lng)
@@ -1337,6 +1730,17 @@ export default function App() {
       if (urlParams.get('admin') === 'true') {
         setIsAdminMode(true);
         triggerNotification('🔑 구글 스프레드시트 연동 승인으로 관리자 모드가 자동 활성화되었습니다.');
+        
+        // Clean URL params to prevent recurring notifications on page refresh
+        try {
+          const cleanSearch = new URLSearchParams(window.location.search);
+          cleanSearch.delete('admin');
+          const finalSearch = cleanSearch.toString();
+          const cleanUrl = window.location.pathname + (finalSearch ? `?${finalSearch}` : '');
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch (historyErr) {
+          console.error('[History Replace Error]', historyErr);
+        }
       }
 
       const importDataStr = urlParams.get('importData');
@@ -1356,6 +1760,9 @@ export default function App() {
 
         if (decoded && typeof decoded === 'object') {
           console.log("[Sheets URL Importer] Loading property data from active URL query params...", decoded);
+          console.log("수신 데이터", decoded);
+          console.log("imageUrl", decoded.imageUrl);
+          console.log("imageUrls", decoded.imageUrls);
           handleAddPropertyFromSheets(decoded);
           // Safely purge raw secret parameters from status bar without reload to prevent re-triggers
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -1472,28 +1879,40 @@ export default function App() {
       priceText: '',
       priceValue: '',
       rentValue: '',
+      priceValueSale: '',
+      priceValueJeonse: '',
+      priceValueRentDeposit: '',
+      rentValueRentMonth: '',
       pyongValue: '',
       floorText: '',
       direction: '남향',
+      dirStandard: '거실 기준',
       location: '',
       useYearText: '',
       useYearValue: '',
       householdsCount: '',
       imageUrl: '',
+      imageUrls: [],
       tags: '',
       description: '',
       note: '',
       fullAddr: '',
       area: '',
+      areaExM2: '',
+      areaSpM2: '',
+      areaExPy: '',
+      areaSpPy: '',
       floor: '',
       dir: '',
       avail: '',
+      roomCount: '',
+      bathCount: '',
       rooms: '',
       date: '',
       parking: '',
       mFee: '',
       priceHTML: '',
-      type: '',
+      type: '아파트',
       trade: '',
       mapLat: '',
       mapLng: ''
@@ -1517,6 +1936,13 @@ export default function App() {
       }
     }
 
+    const { exM2, spM2, exPy, spPy } = parseAreaFields(prop.area || '', prop.pyongValue || '');
+    const { roomCount, bathCount } = parseRoomFields(prop.rooms || '');
+    const { direction, dirStandard } = parseDirFields(prop.dir || prop.direction || '', prop.direction || '');
+
+    const pValueStr = prop.priceValue !== undefined ? String(prop.priceValue) : '';
+    const rValueStr = prop.rentValue !== undefined ? String(prop.rentValue) : '';
+
     setNewProp({
       propertyNo: prop.propertyNo || '',
       floorNow: floorNowVal,
@@ -1525,30 +1951,42 @@ export default function App() {
       category: prop.category || '아파트',
       transactionType: prop.transactionType || '매매',
       priceText: prop.priceText || '',
-      priceValue: prop.priceValue !== undefined ? String(prop.priceValue) : '',
-      rentValue: prop.rentValue !== undefined ? String(prop.rentValue) : '',
+      priceValue: pValueStr,
+      rentValue: rValueStr,
+      priceValueSale: prop.transactionType === '매매' ? pValueStr : '',
+      priceValueJeonse: prop.transactionType === '전세' ? pValueStr : '',
+      priceValueRentDeposit: prop.transactionType === '월세' ? pValueStr : '',
+      rentValueRentMonth: prop.transactionType === '월세' ? rValueStr : '',
       pyongValue: prop.pyongValue !== undefined ? String(prop.pyongValue) : '',
       floorText: prop.floorText || '',
-      direction: prop.direction || '남향',
+      direction: direction,
+      dirStandard: dirStandard,
       location: prop.location || '',
       useYearText: prop.useYearText || '',
       useYearValue: prop.useYearValue !== undefined ? String(prop.useYearValue) : '',
       householdsCount: prop.householdsCount !== undefined ? String(prop.householdsCount) : '',
       imageUrl: prop.imageUrl || '',
+      imageUrls: prop.imageUrls || (prop.imageUrl ? [prop.imageUrl] : []),
       tags: prop.tags ? prop.tags.join(', ') : '',
       description: prop.description || '',
       note: prop.note || '',
       fullAddr: prop.fullAddr || '',
       area: prop.area || '',
+      areaExM2: exM2,
+      areaSpM2: spM2,
+      areaExPy: exPy,
+      areaSpPy: spPy,
       floor: prop.floor || '',
       dir: prop.dir || '',
       avail: prop.avail || '',
+      roomCount: roomCount,
+      bathCount: bathCount,
       rooms: prop.rooms || '',
       date: prop.date || '',
       parking: prop.parking || '',
       mFee: prop.mFee || '',
       priceHTML: prop.priceHTML || '',
-      type: prop.type || '',
+      type: prop.type || prop.category || '아파트',
       trade: prop.trade || '',
       mapLat: prop.mapLat !== undefined ? String(prop.mapLat) : (prop.latitude !== undefined ? String(prop.latitude) : ''),
       mapLng: prop.mapLng !== undefined ? String(prop.mapLng) : (prop.longitude !== undefined ? String(prop.longitude) : '')
@@ -1834,8 +2272,79 @@ export default function App() {
       return;
     }
 
-    const pyong = Number(newProp.pyongValue) || 24;
+    if (!newProp.category || !["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(newProp.category)) {
+      alert('🏷️ 필터 분류 (시스템 매핑용) 카테고리를 올바르게 선택해주세요.');
+      return;
+    }
+
+    const pyong = Number(newProp.areaExPy || newProp.pyongValue) || 24;
     const useYear = Number(newProp.useYearValue) || 2020;
+    
+    // Compile Area Text:
+    const exM2Str = newProp.areaExM2 ? `${newProp.areaExM2}㎡` : '';
+    const spM2Str = newProp.areaSpM2 ? `${newProp.areaSpM2}㎡` : '';
+    const exPyStr = newProp.areaExPy ? `(실 ${newProp.areaExPy}평)` : '';
+    const spPyStr = newProp.areaSpPy ? `(${newProp.areaSpPy}평)` : '';
+    
+    let compiledAreaText = newProp.area;
+    if (newProp.areaExM2 || newProp.areaSpM2) {
+      if (exM2Str && spM2Str) {
+        compiledAreaText = `전용 ${exM2Str}${exPyStr} / 공급 ${spM2Str}${spPyStr}`;
+      } else if (exM2Str) {
+        compiledAreaText = `전용 ${exM2Str}${exPyStr}`;
+      } else if (spM2Str) {
+        compiledAreaText = `공급 ${spM2Str}${spPyStr}`;
+      }
+    } else if (newProp.pyongValue) {
+      compiledAreaText = `${newProp.pyongValue}평 (전용 약 ${Math.floor(Number(newProp.pyongValue) * 3.3)}㎡)`;
+    }
+
+    // Compile Rooms Text:
+    let compiledRoomsText = newProp.rooms;
+    if (newProp.roomCount || newProp.bathCount) {
+      const roomPart = newProp.roomCount ? `방 ${newProp.roomCount}개` : '';
+      const bathPart = newProp.bathCount ? `욕실 ${newProp.bathCount}개` : '';
+      compiledRoomsText = [roomPart, bathPart].filter(Boolean).join(' / ');
+    }
+
+    // Compile Direction Text:
+    let compiledDirText = newProp.dir || newProp.direction;
+    if (newProp.direction && newProp.dirStandard) {
+      compiledDirText = `${newProp.direction} (${newProp.dirStandard})`;
+    }
+
+    // Compile priceText and priceHTML based on numeric values
+    let finalPriceValue = 0;
+    let finalRentValue: number | undefined = undefined;
+
+    if (newProp.transactionType === '매매') {
+      finalPriceValue = Number(newProp.priceValueSale) || Number(newProp.priceValue) || 0;
+    } else if (newProp.transactionType === '전세') {
+      finalPriceValue = Number(newProp.priceValueJeonse) || Number(newProp.priceValue) || 0;
+    } else if (newProp.transactionType === '월세') {
+      finalPriceValue = Number(newProp.priceValueRentDeposit) || Number(newProp.priceValue) || 0;
+      finalRentValue = newProp.rentValueRentMonth ? Number(newProp.rentValueRentMonth) : (newProp.rentValue ? Number(newProp.rentValue) : undefined);
+    }
+
+    let finalPriceText = newProp.priceText || '';
+    let finalPriceHTML = newProp.priceHTML || '';
+
+    if (newProp.transactionType === '매매') {
+      finalPriceText = formatPriceToKorean(finalPriceValue);
+      finalPriceHTML = `매매 <span class="text-primary font-bold text-red-500">${finalPriceText}</span>`;
+    } else if (newProp.transactionType === '전세') {
+      finalPriceText = formatPriceToKorean(finalPriceValue);
+      finalPriceHTML = `전세 <span class="text-secondary font-bold text-blue-600">${finalPriceText}</span>`;
+    } else if (newProp.transactionType === '월세') {
+      const rentStr = finalRentValue ? `${finalRentValue}` : '0';
+      if (finalPriceValue) {
+        finalPriceText = `보증금 ${formatPriceToKorean(finalPriceValue)} 원 / 월세 ${rentStr}만 원`;
+        finalPriceHTML = `월세 <span class="text-accent font-bold text-emerald-650">${formatPriceToKorean(finalPriceValue)}/${rentStr}</span>`;
+      } else {
+        finalPriceText = `월세 ${rentStr}만 원`;
+        finalPriceHTML = `월세 <span class="text-accent font-bold text-emerald-650">0/${rentStr}</span>`;
+      }
+    }
     
     // Keep exact ID when editing; otherwise generate a custom-prop unique ID or respect spreadsheet property ID
     const targetId = editingPropertyId || (newProp.propertyNo ? `gas-${newProp.propertyNo}` : `custom-prop-${Date.now()}`);
@@ -1853,17 +2362,30 @@ export default function App() {
       name: newProp.name,
       category: newProp.category as any,
       transactionType: newProp.transactionType as any,
-      priceText: newProp.priceText || '가격 협의',
-      priceValue: Number(newProp.priceValue) || 1000,
-      rentValue: newProp.rentValue ? Number(newProp.rentValue) : undefined,
+      priceText: finalPriceText || '가격 협의',
+      priceValue: finalPriceValue,
+      rentValue: finalRentValue,
       pyongValue: pyong,
       floorText: compiledFloorText,
       direction: newProp.direction || '남향',
       location: newProp.location || '부산광역시 부산진구',
-      useYearText: newProp.useYearText || `${useYear}년 준공`,
+      useYearText: newProp.useYearText || (newProp.useYearValue ? `${newProp.useYearValue}년 준공` : `${useYear}년 준공`),
       useYearValue: useYear,
       householdsCount: Number(newProp.householdsCount) || 0,
-      imageUrl: newProp.imageUrl || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80',
+      imageUrl: (() => {
+        const primary = newProp.imageUrls && newProp.imageUrls.length > 0 ? newProp.imageUrls[0] : newProp.imageUrl;
+        const resolved = resolveDriveImageUrl(primary);
+        return (resolved && resolved !== 'FOLDER_URL_DETECTED') ? resolved : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
+      })(),
+      imageUrls: newProp.imageUrls && newProp.imageUrls.length > 0 
+        ? newProp.imageUrls.map((url: string) => {
+            const resolved = resolveDriveImageUrl(url);
+            return (resolved && resolved !== 'FOLDER_URL_DETECTED') ? resolved : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
+          })
+        : [(() => {
+            const resolved = resolveDriveImageUrl(newProp.imageUrl);
+            return (resolved && resolved !== 'FOLDER_URL_DETECTED') ? resolved : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
+          })()],
       tags: newProp.tags ? newProp.tags.split(',').map(s => s.trim()).filter(Boolean) : ['우수매물', '즉시안내'],
       description: newProp.description || '부강부동산 엄선 추천 실매물입니다.',
       features: [
@@ -1879,22 +2401,30 @@ export default function App() {
 
       // --- 법적 고시 항목 보강 ---
       fullAddr: newProp.fullAddr || newProp.location || '부산광역시 부산진구',
-      area: newProp.area || `${pyong}평 (전용 약 ${Math.floor(pyong * 3.3)}㎡)`,
+      area: compiledAreaText || newProp.area || `${pyong}평`,
       floor: compiledFloor,
-      dir: newProp.dir || newProp.direction || '남향',
+      dir: compiledDirText || newProp.dir || '남향',
       avail: newProp.avail || '즉시 입주 및 협의가능',
-      rooms: newProp.rooms || '방 3개 / 욕실 2개',
-      date: newProp.date || newProp.useYearText || `${useYear}.01.01`,
+      rooms: compiledRoomsText || newProp.rooms || '방 3개 / 욕실 2개',
+      date: newProp.date || (newProp.useYearValue ? `${newProp.useYearValue}.01.01` : `${useYear}.01.01`),
       parking: newProp.parking || '세대당 1.2대 수준',
       mFee: newProp.mFee || '약 15만원',
       note: newProp.note || newProp.description || '부강 엄선 실내 추천매물',
-      priceHTML: newProp.priceHTML ? getCleanedPriceText(newProp.transactionType, newProp.priceHTML) : `${newProp.transactionType} ${getCleanedPriceText(newProp.transactionType, newProp.priceText)}`,
+      priceHTML: finalPriceHTML,
       type: newProp.type || newProp.category,
       trade: newProp.trade || newProp.transactionType
     };
 
+    // Clean all undefined key-value pairs before writing to Firestore to prevent serialization errors
+    const cleanedCreated = { ...created };
+    Object.keys(cleanedCreated).forEach((key) => {
+      if ((cleanedCreated as any)[key] === undefined) {
+        delete (cleanedCreated as any)[key];
+      }
+    });
+
     try {
-      await setDoc(doc(db, 'properties', targetId), created);
+      await setDoc(doc(db, 'properties', targetId), cleanedCreated as Property);
       if (editingPropertyId) {
         triggerNotification('📝 매물 정보가 클라우드 실시간망에 즉각 수정 반영되었습니다.');
       } else {
@@ -1923,28 +2453,40 @@ export default function App() {
       priceText: '',
       priceValue: '',
       rentValue: '',
+      priceValueSale: '',
+      priceValueJeonse: '',
+      priceValueRentDeposit: '',
+      rentValueRentMonth: '',
       pyongValue: '',
       floorText: '',
       direction: '남향',
+      dirStandard: '거실 기준',
       location: '',
       useYearText: '',
       useYearValue: '',
       householdsCount: '',
       imageUrl: '',
+      imageUrls: [],
       tags: '',
       description: '',
       note: '',
       fullAddr: '',
       area: '',
+      areaExM2: '',
+      areaSpM2: '',
+      areaExPy: '',
+      areaSpPy: '',
       floor: '',
       dir: '',
       avail: '',
+      roomCount: '',
+      bathCount: '',
       rooms: '',
       date: '',
       parking: '',
       mFee: '',
       priceHTML: '',
-      type: '',
+      type: '아파트',
       trade: '',
       mapLat: '',
       mapLng: ''
@@ -2546,13 +3088,24 @@ export default function App() {
         const pyong = Number(newProp.pyongValue) || 24;
         const lat = Number(newProp.mapLat);
         const lng = Number(newProp.mapLng);
+        
+        // Calculate robust preview price based on transaction type if priceValue is not filled
+        let previewPrice = Number(newProp.priceValue);
+        if (newProp.transactionType === '매매' && newProp.priceValueSale) {
+          previewPrice = Number(newProp.priceValueSale);
+        } else if (newProp.transactionType === '전세' && newProp.priceValueJeonse) {
+          previewPrice = Number(newProp.priceValueJeonse);
+        } else if (newProp.transactionType === '월세' && newProp.priceValueRentDeposit) {
+          previewPrice = Number(newProp.priceValueRentDeposit);
+        }
+        
         list.push({
           id: 'new-prop-preview',
           name: `⭐ [등록중] ${newProp.name || '본진구 새매물'}`,
           category: newProp.category as any,
           transactionType: newProp.transactionType as any,
           priceText: newProp.priceText || '가격 입력대기',
-          priceValue: Number(newProp.priceValue) || 1000,
+          priceValue: previewPrice || 1000,
           pyongValue: pyong,
           floorText: newProp.floorText || '고층/20층',
           direction: newProp.direction || '남향',
@@ -5241,7 +5794,7 @@ export default function App() {
                                   }`}>
                                     {isChecked && <Check className="w-3 h-3 stroke-[3px]" />}
                                   </div>
-                                  <span className={`text-[12px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-700'}`}>
+                                  <span className={`text-[12px] font-bold ${isChecked ? 'text-slate-900 font-extrabold' : 'text-slate-705'}`}>
                                     {item.label}
                                   </span>
                                 </button>
@@ -5269,7 +5822,7 @@ export default function App() {
                           e.preventDefault();
                           setViewMode('grid');
                           setTimeout(() => {
-                            const el = document.getElementById('filter-station');
+                            const el = document.getElementById('listings-container');
                             if (el) {
                               el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }
@@ -5281,7 +5834,7 @@ export default function App() {
                     {searchQuery ? (
                       <button 
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650 focus:outline-none cursor-pointer"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-655 focus:outline-none cursor-pointer"
                         type="button"
                       >
                         <X className="w-3 h-3" />
@@ -5292,7 +5845,7 @@ export default function App() {
                         onClick={() => {
                           setViewMode('grid');
                           setTimeout(() => {
-                            const el = document.getElementById('filter-station');
+                            const el = document.getElementById('listings-container');
                             if (el) {
                               el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }
@@ -5500,21 +6053,293 @@ export default function App() {
                           className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
                         />
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-black text-slate-700 mb-1">🖼️ 대표 이미지 인터넷 주소 URL</label>
-                        <input
-                          type="text"
-                          value={newProp.imageUrl}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, imageUrl: e.target.value }))}
-                          placeholder="예: https://images.unsplash.com/photo-..."
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                        />
+                      <div className="sm:col-span-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-black text-slate-700">🖼️ 매물 이미지 등록 방식 (최대 10개) *</label>
+                          <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => setUploadTab('drive')}
+                              className={`text-[9.5px] font-black px-2 py-0.5 rounded-md transition-all ${
+                                uploadTab === 'drive'
+                                  ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              구글드라이브/웹링크
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setUploadTab('upload')}
+                              className={`text-[9.5px] font-black px-2 py-0.5 rounded-md transition-all ${
+                                uploadTab === 'upload'
+                                  ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              사진 직접 업로드
+                            </button>
+                          </div>
+                        </div>
+
+                        {uploadTab === 'drive' ? (
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                id="drive-url-input"
+                                placeholder="구글 드라이브 공유 링크 또는 웹 이미지 URL 입력"
+                                className="flex-grow text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const input = e.currentTarget as HTMLInputElement;
+                                    const url = input.value.trim();
+                                    if (url) {
+                                      const currentUrls = newProp.imageUrls || (newProp.imageUrl ? [newProp.imageUrl] : []);
+                                      if (currentUrls.length >= 10) {
+                                        triggerNotification('⚠️ 최대 10장까지만 등록할 수 있습니다.');
+                                      } else {
+                                        const resolved = resolveDriveImageUrl(url);
+                                        const updated = [...currentUrls, resolved];
+                                        setNewProp(prev => ({
+                                          ...prev,
+                                          imageUrls: updated,
+                                          imageUrl: updated[0] || ''
+                                        }));
+                                        input.value = '';
+                                        triggerNotification('📡 웹 링크 이미지가 사진 리스트에 추가되었습니다.');
+                                      }
+                                    }
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById('drive-url-input') as HTMLInputElement;
+                                  const url = el?.value?.trim() || '';
+                                  if (url) {
+                                    const currentUrls = newProp.imageUrls || (newProp.imageUrl ? [newProp.imageUrl] : []);
+                                    if (currentUrls.length >= 10) {
+                                      triggerNotification('⚠️ 최대 10장까지만 등록할 수 있습니다.');
+                                    } else {
+                                      const resolved = resolveDriveImageUrl(url);
+                                      const updated = [...currentUrls, resolved];
+                                      setNewProp(prev => ({
+                                        ...prev,
+                                        imageUrls: updated,
+                                        imageUrl: updated[0] || ''
+                                      }));
+                                      if (el) el.value = '';
+                                      triggerNotification('📡 웹 링크 이미지가 사진 리스트에 추가되었습니다.');
+                                    }
+                                  } else {
+                                    triggerNotification('⚠️ 등록할 사진 주소(URL)를 입력해주세요.');
+                                  }
+                                }}
+                                className="bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0 transition-colors cursor-pointer"
+                              >
+                                추가
+                              </button>
+                            </div>
+                            <p className="text-[9.5px] text-slate-450 font-bold leading-normal">
+                              💡 엔터를 치거나 우측의 [추가] 버튼을 누르면 사진이 1장씩 아래로 계속 등록됩니다. 드라이브 링크 공유 설정을 <strong className="text-amber-700">"링크가 있는 모든 사용자"</strong> 뷰어 권한으로 적용해주세요.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            <div className="relative border-2 border-dashed border-slate-200 hover:border-amber-400/80 rounded-xl bg-slate-50/50 p-3 flex flex-col items-center justify-center transition-all min-h-[58px] group">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={async (e) => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) {
+                                    setIsUploadingLocal(true);
+                                    setUploadError('');
+                                    try {
+                                      const currentUrls = newProp.imageUrls || (newProp.imageUrl ? [newProp.imageUrl] : []);
+                                      if (currentUrls.length >= 10) {
+                                        throw new Error('최대 10장까지만 등록할 수 있습니다.');
+                                      }
+                                      const allowedCount = 10 - currentUrls.length;
+                                      const filesToProcess = files.slice(0, allowedCount);
+                                      
+                                      const promises = filesToProcess.map(file => compressAndConvertImage(file));
+                                      const compressedBase64List = await Promise.all(promises);
+                                      
+                                      const updatedUrls = [...currentUrls, ...compressedBase64List];
+                                      setNewProp(prev => ({
+                                        ...prev,
+                                        imageUrls: updatedUrls,
+                                        imageUrl: updatedUrls[0] || ''
+                                      }));
+                                      
+                                      if (files.length > allowedCount) {
+                                        triggerNotification(`📸 사진 일부가 업로드되었습니다. 최대 10장 한도로 인해 ${files.length - allowedCount}장이 제외되었습니다.`);
+                                      } else {
+                                        triggerNotification(`📸 사진 ${compressedBase64List.length}장 불러오기 및 지능형 고속 리사이징 완료!`);
+                                      }
+                                    } catch (err: any) {
+                                      setUploadError(err?.message || '사진 로딩 실패');
+                                    } finally {
+                                      setIsUploadingLocal(false);
+                                    }
+                                  }
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                              />
+                              <Upload className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors mb-1" />
+                              <span className="text-[10px] text-slate-650 font-black text-center">
+                                {isUploadingLocal ? '📸 최적화 압축 변환 중...' : '여러 장 클릭하거나 모아서 드래그 & 드롭'}
+                              </span>
+                            </div>
+                            {uploadError && (
+                              <p className="text-[9px] text-red-500 font-bold">{uploadError}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Interactive dynamic visual image gallery for registered images */}
+                        {(() => {
+                          const currentUrls = newProp.imageUrls && newProp.imageUrls.length > 0 
+                            ? newProp.imageUrls 
+                            : (newProp.imageUrl ? [newProp.imageUrl] : []);
+                          
+                          if (currentUrls.length === 0) {
+                            return (
+                              <div className="mt-2.5 p-4 rounded-xl border border-dashed border-slate-250 bg-slate-50 flex flex-col items-center justify-center min-h-[96px] text-center text-slate-400 select-none">
+                                <span className="text-[11px] font-black">🖼️ 등록된 매물 사진이 없습니다.</span>
+                                <span className="text-[9px] font-bold mt-1 text-slate-350">대표 일러스트 레이아웃이 임시 기본값으로 표시됩니다.</span>
+                              </div>
+                            );
+                          }
+
+                          const hasDriveFolder = currentUrls.some(url => resolveDriveImageUrl(url) === 'FOLDER_URL_DETECTED');
+
+                          return (
+                            <div className="mt-2.5 flex flex-col gap-2">
+                              {hasDriveFolder && (
+                                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-normal flex flex-col gap-1.5 shadow-xs">
+                                  <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>📡 구글드라이브 폴더가 목록에 포함됨</span>
+                                  </div>
+                                  <p className="text-[10px] font-bold text-slate-600 leading-relaxed">
+                                    동기 전산 연동 이용 시, GAS 백엔드가 폴더 안의 사진들을 대표 이미지로 실시간 주입 연동합니다. 수동 웹 모드에서는 개별 이미지 파일 링크를 직접 추가하시는 것을 권장합니다.
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex flex-col gap-2">
+                                <div className="flex items-center justify-between text-[10px] font-black text-slate-600">
+                                  <span>🖼️ 실시간 등록 매물 사진 ({currentUrls.length} / 10 장)</span>
+                                  <span className="text-amber-600">💡 클릭하면 '대표사진'으로 임명됩니다.</span>
+                                </div>
+
+                                <div className="grid grid-cols-5 gap-1.5">
+                                  {currentUrls.map((img, iIdx) => {
+                                    const resolved = resolveDriveImageUrl(img);
+                                    const isMain = iIdx === 0;
+                                    const isFolder = resolved === 'FOLDER_URL_DETECTED';
+                                    
+                                    return (
+                                      <div 
+                                        key={iIdx}
+                                        className={`relative aspect-square rounded-lg border-2 overflow-hidden bg-white transition-all cursor-pointer group ${
+                                          isMain ? 'border-amber-500 shadow-sm scale-102 ring-1 ring-amber-400' : 'border-slate-200 hover:border-slate-300'
+                                        }`}
+                                        onClick={() => {
+                                          if (isMain) return;
+                                          const updated = [...currentUrls];
+                                          const target = updated.splice(iIdx, 1)[0];
+                                          updated.unshift(target);
+                                          setNewProp(prev => ({
+                                            ...prev,
+                                            imageUrls: updated,
+                                            imageUrl: updated[0] || ''
+                                          }));
+                                          triggerNotification('👑 대표 사진이 변경되었습니다!');
+                                        }}
+                                        title={isMain ? "현재 대표 사진" : "이 사진을 대표 사진으로 설정"}
+                                      >
+                                        <img 
+                                          src={isFolder ? DEFAULT_FALLBACK_IMAGE : resolved} 
+                                          alt={`사진 ${iIdx + 1}`} 
+                                          referrerPolicy="no-referrer"
+                                          className="w-full h-full object-cover" 
+                                          onError={(e) => {
+                                            e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                                          }}
+                                        />
+                                        
+                                        {isMain ? (
+                                          <div className="absolute bottom-0 inset-x-0 h-4 bg-amber-500 text-slate-950 font-black text-[8.5px] text-center flex items-center justify-center select-none shadow-inner">
+                                            대표사진
+                                          </div>
+                                        ) : (
+                                          <div className="absolute bottom-0 inset-x-0 h-4 bg-black/45 text-white/95 font-bold text-[8px] text-center flex items-center justify-center select-none opacity-0 group-hover:opacity-100 transition-opacity">
+                                            대표지정
+                                          </div>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const updated = currentUrls.filter((_, idx) => idx !== iIdx);
+                                            setNewProp(prev => ({
+                                              ...prev,
+                                              imageUrls: updated,
+                                              imageUrl: updated[0] || ''
+                                            }));
+                                            triggerNotification('🗑️ 선택한 사진이 목록에서 제거되었습니다.');
+                                          }}
+                                          className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-0.5 shadow-xs transition-opacity opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex items-center justify-center hover:bg-red-650 z-20 w-[15px] h-[15px]"
+                                          title="사진 삭제"
+                                        >
+                                          <X className="w-2.5 h-2.5 stroke-[3px]" />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
                     {/* Step 1 to 13 Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                       
+                      {/* 필터 분류 */}
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 md:col-span-1">
+                        <label className="block text-[11px] font-black text-amber-900 mb-1">🏷️ 필터 분류 (시스템 매핑용) *</label>
+                        <select
+                          value={newProp.category}
+                          onChange={(e) => setNewProp(prev => ({ ...prev, category: e.target.value as any }))}
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold bg-white text-slate-900"
+                        >
+                          {(!newProp.category || !["아파트", "오피스텔", "분양권", "원룸", "투룸", "주택", "빌라", "상가", "공장", "토지"].includes(newProp.category)) && (
+                            <option value="">⚠️ 분류 직접 선택 (필수)</option>
+                          )}
+                          <option value="아파트">아파트</option>
+                          <option value="오피스텔">오피스텔</option>
+                          <option value="분양권">분양권</option>
+                          <option value="원룸">원룸</option>
+                          <option value="투룸">투룸</option>
+                          <option value="주택">주택</option>
+                          <option value="빌라">빌라</option>
+                          <option value="상가">상가</option>
+                          <option value="공장">공장</option>
+                          <option value="토지">토지</option>
+                        </select>
+                      </div>
+
                       {/* 1. 소재지 */}
                       <div className="md:col-span-2 bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 flex flex-col justify-between">
                         <div>
@@ -5570,87 +6395,229 @@ export default function App() {
                       </div>
 
                       {/* 2. 면적 */}
-                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60">
-                        <label className="block text-[11px] font-black text-amber-900 mb-1">2. 면적 (고시 내용 및 평수) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={newProp.area}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, area: e.target.value }))}
-                          placeholder="예: 공급 112㎡ / 전용 84㎡"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 mb-2"
-                        />
-                        <div className="relative">
-                          <input
-                            type="number"
-                            required
-                            value={newProp.pyongValue}
-                            onChange={(e) => setNewProp(prev => ({ ...prev, pyongValue: e.target.value }))}
-                            placeholder="평수: 34"
-                            className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 pr-6"
-                          />
-                          <span className="absolute right-2 top-2 text-xs font-black text-slate-400">평</span>
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 flex flex-col gap-2">
+                        <label className="block text-[11px] font-black text-amber-900 mb-0.5">2. 면적 (고시 및 평수 변환) *</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">전용면적 (㎡)</span>
+                            <input
+                              type="number"
+                              step="any"
+                              required
+                              value={newProp.areaExM2}
+                              onChange={(e) => {
+                                const m2 = e.target.value;
+                                const py = m2 ? (Number(m2) * 0.3025).toFixed(2) : '';
+                                setNewProp(prev => ({ 
+                                  ...prev, 
+                                  areaExM2: m2, 
+                                  areaExPy: py,
+                                  pyongValue: py
+                                }));
+                              }}
+                              placeholder="예: 84.9"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">공급면적 (㎡)</span>
+                            <input
+                              type="number"
+                              step="any"
+                              required
+                              value={newProp.areaSpM2}
+                              onChange={(e) => {
+                                const m2 = e.target.value;
+                                const py = m2 ? (Number(m2) * 0.3025).toFixed(2) : '';
+                                setNewProp(prev => ({ 
+                                  ...prev, 
+                                  areaSpM2: m2, 
+                                  areaSpPy: py
+                                }));
+                              }}
+                              placeholder="예: 112.5"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">전용면적 (평) - 자동변환</span>
+                            <input
+                              type="number"
+                              step="any"
+                              value={newProp.areaExPy}
+                              onChange={(e) => {
+                                const py = e.target.value;
+                                const m2 = py ? (Number(py) / 0.3025).toFixed(2) : '';
+                                setNewProp(prev => ({ 
+                                  ...prev, 
+                                  areaExPy: py, 
+                                  pyongValue: py,
+                                  areaExM2: m2
+                                }));
+                              }}
+                              placeholder="자동계산"
+                              className="w-full text-xs border border-slate-200 bg-slate-50 rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">공급면적 (평) - 자동변환</span>
+                            <input
+                              type="number"
+                              step="any"
+                              value={newProp.areaSpPy}
+                              onChange={(e) => {
+                                const py = e.target.value;
+                                const m2 = py ? (Number(py) / 0.3025).toFixed(2) : '';
+                                setNewProp(prev => ({ 
+                                  ...prev, 
+                                  areaSpPy: py,
+                                  areaSpM2: m2
+                                }));
+                              }}
+                              placeholder="자동계산"
+                              className="w-full text-xs border border-slate-200 bg-slate-50 rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
+                            />
+                          </div>
                         </div>
                       </div>
 
                       {/* 3. 가격 */}
-                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="sm:col-span-3">
-                          <label className="block text-[11px] font-black text-amber-900 mb-1">3. 가격 (보증금/월세 텍스트 및 정렬용) *</label>
-                          <input
-                            type="text"
-                            required
-                            value={newProp.priceText}
-                            onChange={(e) => setNewProp(prev => ({ ...prev, priceText: e.target.value }))}
-                            placeholder="예: 4억 8,500만 또는 보증금 1,000 / 월 60만"
-                            className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                          />
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 md:col-span-2">
+                        <label className="block text-[11px] font-black text-amber-900 mb-2">3. 가격 (거래 분류별 상세 설정) *</label>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {/* 매매가격 입력 */}
+                          <div className={`p-2.5 rounded-lg border transition-all ${newProp.transactionType === '매매' ? 'bg-red-50/40 border-red-200' : 'bg-slate-50/55 border-slate-100 opacity-75'}`}>
+                            <span className="block text-[10px] font-black text-slate-700 mb-1.5 flex items-center justify-between">
+                              <span>매매가격</span>
+                              {newProp.transactionType === '매매' ? (
+                                <span className="text-[8px] bg-red-100 text-red-700 px-1 py-0.5 rounded font-extrabold animate-pulse">기본선택</span>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 font-bold">(만 원)</span>
+                              )}
+                            </span>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                required={newProp.transactionType === '매매'}
+                                value={newProp.priceValueSale}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewProp(prev => ({ 
+                                    ...prev, 
+                                    priceValueSale: val,
+                                    priceValue: prev.transactionType === '매매' ? val : prev.priceValue
+                                  }));
+                                }}
+                                placeholder="예: 55000 (5억5천)"
+                                className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-slate-900 pr-5"
+                              />
+                              <span className="absolute right-2 top-2 text-[9px] font-bold text-slate-400">만</span>
+                            </div>
+                          </div>
+
+                          {/* 전세가격 입력 */}
+                          <div className={`p-2.5 rounded-lg border transition-all ${newProp.transactionType === '전세' ? 'bg-blue-50/40 border-blue-200' : 'bg-slate-50/55 border-slate-100 opacity-75'}`}>
+                            <span className="block text-[10px] font-black text-slate-700 mb-1.5 flex items-center justify-between">
+                              <span>전세가격</span>
+                              {newProp.transactionType === '전세' ? (
+                                <span className="text-[8px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-extrabold animate-pulse">기본선택</span>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 font-bold">(만 원)</span>
+                              )}
+                            </span>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                required={newProp.transactionType === '전세'}
+                                value={newProp.priceValueJeonse}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewProp(prev => ({ 
+                                    ...prev, 
+                                    priceValueJeonse: val,
+                                    priceValue: prev.transactionType === '전세' ? val : prev.priceValue
+                                  }));
+                                }}
+                                placeholder="예: 32000 (3억2천)"
+                                className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-slate-900 pr-5"
+                              />
+                              <span className="absolute right-2 top-2 text-[9px] font-bold text-slate-400">만</span>
+                            </div>
+                          </div>
+
+                          {/* 월세 보증금 및 월세액 입력 */}
+                          <div className={`p-2.5 rounded-lg border transition-all ${newProp.transactionType === '월세' ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50/55 border-slate-100 opacity-75'}`}>
+                            <span className="block text-[10px] font-black text-slate-700 mb-1.5 flex items-center justify-between">
+                              <span>월세 / 차임 정보</span>
+                              {newProp.transactionType === '월세' ? (
+                                <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded font-extrabold animate-pulse">기본선택</span>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 font-bold">(만 원)</span>
+                              )}
+                            </span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  required={newProp.transactionType === '월세'}
+                                  value={newProp.priceValueRentDeposit}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setNewProp(prev => ({ 
+                                      ...prev, 
+                                      priceValueRentDeposit: val,
+                                      priceValue: prev.transactionType === '월세' ? val : prev.priceValue
+                                    }));
+                                  }}
+                                  placeholder="보증금 (3000)"
+                                  className="w-full text-[11px] border border-slate-200 bg-white rounded-lg p-1.5 outline-none font-bold text-slate-900"
+                                />
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  required={newProp.transactionType === '월세'}
+                                  value={newProp.rentValueRentMonth}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setNewProp(prev => ({ 
+                                      ...prev, 
+                                      rentValueRentMonth: val,
+                                      rentValue: prev.transactionType === '월세' ? val : prev.rentValue
+                                    }));
+                                  }}
+                                  placeholder="월세 (80)"
+                                  className="w-full text-[11px] border border-slate-200 bg-white rounded-lg p-1.5 outline-none font-bold text-slate-900"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">수치값(정렬용_만원)</label>
-                          <input
-                            type="number"
-                            required
-                            value={newProp.priceValue}
-                            onChange={(e) => setNewProp(prev => ({ ...prev, priceValue: e.target.value }))}
-                            placeholder="예: 48500"
-                            className="w-full text-xs border border-slate-200 bg-white rounded-lg p-1.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">월세액(만원_옵션)</label>
-                          <input
-                            type="number"
-                            value={newProp.rentValue}
-                            onChange={(e) => setNewProp(prev => ({ ...prev, rentValue: e.target.value }))}
-                            placeholder="예: 60"
-                            className="w-full text-xs border border-slate-200 bg-white rounded-lg p-1.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                          />
-                        </div>
-                        <div className="flex items-end text-[10px] text-slate-400 font-extrabold pb-1">
-                          수치형은 연식/정렬 필터 핵심
+
+                        <div className="mt-2 text-[11px] text-amber-800 font-extrabold bg-amber-50 rounded-lg p-2 border border-amber-100 flex items-center justify-between">
+                          <span>📋 실시간 고시용 텍스트 프리뷰:</span>
+                          <span className="text-slate-900 font-bold">{
+                            newProp.transactionType === '매매' ? `매매 ${formatPriceToKorean(newProp.priceValueSale) || '0원'}` :
+                            newProp.transactionType === '전세' ? `전세 ${formatPriceToKorean(newProp.priceValueJeonse) || '0원'}` :
+                            `월세 보증금 ${formatPriceToKorean(newProp.priceValueRentDeposit) || '0원'} / 월세 ${newProp.rentValueRentMonth || '0'}만`
+                          }</span>
                         </div>
                       </div>
 
                       {/* 4. 중개대상물 종류 */}
                       <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60">
-                        <label className="block text-[11px] font-black text-amber-900 mb-1">4. 중개대상물 종류 *</label>
-                        <select
-                          value={newProp.category}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, category: e.target.value as any }))}
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold bg-white text-slate-900"
-                        >
-                          <option value="아파트">아파트</option>
-                          <option value="오피스텔">오피스텔</option>
-                          <option value="분양권">분양권</option>
-                          <option value="원룸">원룸</option>
-                          <option value="투룸">투룸</option>
-                          <option value="주택">주택</option>
-                          <option value="빌라">빌라</option>
-                          <option value="상가">상가</option>
-                          <option value="공장">공장</option>
-                          <option value="토지">토지</option>
-                        </select>
+                        <label className="block text-[11px] font-black text-amber-900 mb-1">4. 중개대상물 종류 (직접 입력) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newProp.type}
+                          onChange={(e) => setNewProp(prev => ({ ...prev, type: e.target.value }))}
+                          placeholder="예: 아파트, 단독주택, 상가건물"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                        />
                       </div>
 
                       {/* 5. 거래형태 */}
@@ -5659,7 +6626,7 @@ export default function App() {
                         <select
                           value={newProp.transactionType}
                           onChange={(e) => setNewProp(prev => ({ ...prev, transactionType: e.target.value as any }))}
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold bg-white text-slate-900"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold bg-white text-slate-900"
                         >
                           <option value="매매">매매</option>
                           <option value="전세">전세</option>
@@ -5710,21 +6677,37 @@ export default function App() {
                           value={newProp.avail}
                           onChange={(e) => setNewProp(prev => ({ ...prev, avail: e.target.value }))}
                           placeholder="예: 즉시 입주 가능 (또는 날짜 협의)"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
                         />
                       </div>
 
                       {/* 8. 방 수 / 욕실 수 */}
-                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60">
-                        <label className="block text-[11px] font-black text-amber-900 mb-1">8. 방 수 / 욕실 수 *</label>
-                        <input
-                          type="text"
-                          required
-                          value={newProp.rooms}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, rooms: e.target.value }))}
-                          placeholder="예: 방 3개 / 욕실 2개"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                        />
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 flex flex-col gap-2">
+                        <label className="block text-[11px] font-black text-amber-900 mb-0.5">8. 구조 (방 및 욕실 개수) *</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">방 수 (개)</span>
+                            <input
+                              type="number"
+                              required
+                              value={newProp.roomCount}
+                              onChange={(e) => setNewProp(prev => ({ ...prev, roomCount: e.target.value }))}
+                              placeholder="예: 3"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">욕실 수 (개)</span>
+                            <input
+                              type="number"
+                              required
+                              value={newProp.bathCount}
+                              onChange={(e) => setNewProp(prev => ({ ...prev, bathCount: e.target.value }))}
+                              placeholder="예: 2"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* 9. 사용승인일 */}
@@ -5734,18 +6717,24 @@ export default function App() {
                           type="text"
                           required
                           value={newProp.date}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, date: e.target.value }))}
-                          placeholder="예: 2019.05.20"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 mb-2"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const yr = extractYear(val);
+                            setNewProp(prev => ({ 
+                              ...prev, 
+                              date: val, 
+                              useYearValue: yr,
+                              useYearText: yr ? `${yr}년 준공` : ''
+                            }));
+                          }}
+                          placeholder="예: 2019.05.20 (또는 준공연도)"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
                         />
-                        <input
-                          type="number"
-                          required
-                          value={newProp.useYearValue}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, useYearValue: e.target.value }))}
-                          placeholder="준공년도 예: 2019"
-                          className="w-full text-[11px] border border-slate-200 bg-white rounded-lg p-1.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
-                        />
+                        {newProp.useYearValue && (
+                          <div className="text-[10px] text-amber-600 font-bold mt-1">
+                            ⚙️ 준공연도 자동 매핑: {newProp.useYearValue}년
+                          </div>
+                        )}
                       </div>
 
                       {/* 10. 주차대수 */}
@@ -5757,7 +6746,7 @@ export default function App() {
                           value={newProp.parking}
                           onChange={(e) => setNewProp(prev => ({ ...prev, parking: e.target.value }))}
                           placeholder="예: 세대당 1.25대 (총 1,450대)"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
                         />
                       </div>
 
@@ -5770,28 +6759,65 @@ export default function App() {
                           value={newProp.mFee}
                           onChange={(e) => setNewProp(prev => ({ ...prev, mFee: e.target.value }))}
                           placeholder="예: 약 15만원 (전기, 수도 요금 포함)"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
                         />
                       </div>
 
                       {/* 12. 방향 */}
-                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60">
-                        <label className="block text-[11px] font-black text-amber-900 mb-1">12. 방향 *</label>
-                        <input
-                          type="text"
-                          required
-                          value={newProp.dir}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, dir: e.target.value }))}
-                          placeholder="예: 남서향 (거실 기준)"
-                          className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900 mb-2"
-                        />
-                        <input
-                          type="text"
-                          value={newProp.direction}
-                          onChange={(e) => setNewProp(prev => ({ ...prev, direction: e.target.value }))}
-                          placeholder="간략명 예: 남서향"
-                          className="w-full text-[11px] border border-slate-200 bg-white rounded-lg p-1.5 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
-                        />
+                      <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-100/60 flex flex-col gap-2">
+                        <label className="block text-[11px] font-black text-amber-900 mb-0.5">12. 방향 / 기준 사항 *</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">방향</span>
+                            <input
+                              type="text"
+                              required
+                              value={newProp.direction}
+                              onChange={(e) => setNewProp(prev => ({ ...prev, direction: e.target.value }))}
+                              placeholder="예: 남서향"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-500 mb-0.5">기준</span>
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {['거실', '안방', '주출입구', '직접입력'].map((opt) => {
+                                const isSelected = 
+                                  opt === '직접입력'
+                                    ? (newProp.dirStandard !== '거실 기준' && newProp.dirStandard !== '안방 기준' && newProp.dirStandard !== '주출입구 기준')
+                                    : (newProp.dirStandard === `${opt} 기준`);
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => {
+                                      if (opt === '직접입력') {
+                                        setNewProp(prev => ({ ...prev, dirStandard: '' }));
+                                      } else {
+                                        setNewProp(prev => ({ ...prev, dirStandard: `${opt} 기준` }));
+                                      }
+                                    }}
+                                    className={`px-2 py-0.5 text-[9.5px] font-black rounded border transition-all ${
+                                      isSelected
+                                        ? 'bg-[#03C75A] text-white border-[#03C75A] shadow-xs'
+                                        : 'bg-white text-slate-600 border-slate-205 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <input
+                              type="text"
+                              required
+                              value={newProp.dirStandard}
+                              onChange={(e) => setNewProp(prev => ({ ...prev, dirStandard: e.target.value }))}
+                              placeholder="예: 거실 기준"
+                              className="w-full text-xs border border-slate-200 bg-white rounded-lg p-2 focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-900"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                     </div>
@@ -6000,7 +7026,15 @@ export default function App() {
 
                                 {/* Row 2: Price Label in vibrant blue */}
                                 <div className="text-[16px] sm:text-[17px] font-black text-[#2B66FF] tracking-tight">
-                                  {prop.transactionType} <span className="font-extrabold">{getCleanedPriceText(prop.transactionType, prop.priceText)}</span>
+                                  {prop.transactionType === '월세' ? (
+                                    <>
+                                      보증금 <span className="font-extrabold">{prop.priceValue > 0 ? formatPriceToKorean(prop.priceValue) : '0'} 원</span> / 월세 <span className="font-extrabold">{prop.rentValue ? `${prop.rentValue.toLocaleString()}만 원` : '0만 원'}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {prop.transactionType} <span className="font-extrabold">{getCleanedPriceText(prop.transactionType, prop.priceText)}</span>
+                                    </>
+                                  )}
                                 </div>
 
                                 {/* Row 3: Standard Specifications dot format */}
@@ -6029,10 +7063,13 @@ export default function App() {
                               {/* Image Box */}
                               <div className="w-full h-24 sm:h-28 rounded-lg overflow-hidden bg-slate-50 relative border border-slate-150 shadow-inner">
                                 <img
-                                  src={prop.imageUrl}
+                                  src={resolveDriveImageUrl(prop.imageUrl)}
                                   alt={prop.name}
                                   referrerPolicy="no-referrer"
                                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                                  }}
                                 />
 
                                 {/* Favorite Box Outline inside the Image exactly like bottom right Star box */}
@@ -6140,10 +7177,13 @@ export default function App() {
                                 <div className="w-full h-24 sm:h-28 rounded-lg overflow-hidden bg-slate-100 relative border border-slate-200/80 shadow-xs flex items-center justify-center">
                                   {propertiesInGroup[0].imageUrl ? (
                                     <img
-                                      src={propertiesInGroup[0].imageUrl}
+                                      src={resolveDriveImageUrl(propertiesInGroup[0].imageUrl)}
                                       alt="Group thumb"
                                       referrerPolicy="no-referrer"
                                       className="w-full h-full object-cover transition-transform"
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                                      }}
                                     />
                                   ) : (
                                     <Building className="w-8 h-8 text-slate-300" />
@@ -6215,7 +7255,15 @@ export default function App() {
                                             </div>
 
                                             <div className="text-[15px] font-black text-[#2B66FF] tracking-tight">
-                                              {subProp.transactionType} <span className="font-extrabold">{getCleanedPriceText(subProp.transactionType, subProp.priceText)}</span>
+                                              {subProp.transactionType === '월세' ? (
+                                                <>
+                                                  보증금 <span className="font-extrabold">{subProp.priceValue > 0 ? formatPriceToKorean(subProp.priceValue) : '0'} 원</span> / 월세 <span className="font-extrabold">{subProp.rentValue ? `${subProp.rentValue.toLocaleString()}만 원` : '0만 원'}</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  {subProp.transactionType} <span className="font-extrabold">{getCleanedPriceText(subProp.transactionType, subProp.priceText)}</span>
+                                                </>
+                                              )}
                                             </div>
 
                                             <div className="text-[11.2px] text-slate-500 font-bold mt-0.5">
@@ -6384,7 +7432,10 @@ export default function App() {
                       style={{ width: "100%", height: "100%" }}
                       level={mapLevel}
                       mapTypeId="ROADMAP"
-                      onClick={() => setSelectedMapGroupKey(null)}
+                      onClick={() => {
+                        setSelectedMapGroupKey(null);
+                        setActiveMarkerId(null);
+                      }}
                       onCreate={(map) => {
                         if (map) {
                           try {
@@ -6418,6 +7469,8 @@ export default function App() {
                               key={cluster.id}
                               position={{ lat: cluster.centerLat, lng: cluster.centerLng }}
                               clickable={true}
+                              xAnchor={0.5}
+                              yAnchor={0.5}
                             >
                               <div 
                                 onClick={() => {
@@ -6513,6 +7566,8 @@ export default function App() {
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
                                 zIndex={100}
+                                xAnchor={0.5}
+                                yAnchor={1.0}
                               >
                                 <div 
                                   onClick={(e) => {
@@ -6525,7 +7580,7 @@ export default function App() {
                                   }}
                                   className={`relative flex flex-col p-4 text-xs sm:text-sm font-black rounded-[20px] bg-white text-slate-800 transition-all cursor-pointer shadow-xl min-w-[200px] max-w-[240px] ${activeRingClass}`}
                                   style={{ 
-                                    transform: 'translate(-50%, calc(-100% - 15px))',
+                                    transform: 'translateY(-48px)',
                                     pointerEvents: 'auto'
                                   }}
                                 >
@@ -6559,7 +7614,7 @@ export default function App() {
                                         <div className="flex items-center justify-between w-full">
                                           <span className={`font-black shrink-0 text-gray-500`}>{prop.transactionType}</span>
                                           <span className="text-[#2B66FF] font-black tracking-tight truncate leading-none">
-                                            {prop.priceText}
+                                            {getCleanedPriceText(prop.transactionType, prop.priceText)}
                                           </span>
                                         </div>
                                       </div>
@@ -6595,6 +7650,8 @@ export default function App() {
                                 position={{ lat: propLat, lng: propLng }}
                                 clickable={true}
                                 zIndex={1}
+                                xAnchor={0.5}
+                                yAnchor={0.5}
                               >
                                 <div 
                                   onClick={(e) => {
@@ -6613,7 +7670,7 @@ export default function App() {
                                       : 'bg-[#7B8C9E]'
                                   }`}
                                   style={{ 
-                                    transform: 'translate(-50%, -50%)',
+                                    transform: 'none',
                                     pointerEvents: 'auto',
                                     width: '32px',
                                     height: '32px',
@@ -6877,7 +7934,9 @@ export default function App() {
                                     </div>
                                   </td>
                                   <td className="py-3 px-2 font-bold text-slate-900">
-                                    {prop.priceText.includes('/') ? prop.priceText.split('/')[0].replace('보증금', '').trim() : prop.priceText}
+                                    {prop.transactionType === '월세' 
+                                      ? (prop.priceText.includes('/') ? prop.priceText.split('/')[0].replace('보증금', '').trim() : prop.priceText) 
+                                      : getCleanedPriceText(prop.transactionType, prop.priceText)}
                                   </td>
                                   <td className="py-3 px-2 font-bold text-emerald-600">
                                     {prop.rentValue ? `${prop.rentValue}만` : '-'}
@@ -6940,7 +7999,7 @@ export default function App() {
 
                           <div className="flex gap-3">
                             <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700">
-                              <img src={activeProp.imageUrl} alt={activeProp.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                              <img src={resolveDriveImageUrl(activeProp.imageUrl)} alt={activeProp.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_FALLBACK_IMAGE; }} />
                             </div>
                             <div className="min-w-0 flex flex-col justify-center">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -6964,7 +8023,7 @@ export default function App() {
                           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-800/60 flex flex-col gap-2 text-xs">
                             <div className="flex justify-between items-center py-1 border-b border-slate-700/40">
                               <span className="text-slate-400">거래금액</span>
-                              <span className="text-amber-400 font-extrabold text-sm">{activeProp.priceText}</span>
+                              <span className="text-amber-400 font-extrabold text-sm">{getPropertyPriceDisplay(activeProp)}</span>
                             </div>
                             <div className="flex justify-between items-center py-1 border-b border-slate-700/40">
                               <span className="text-slate-400">전용/계약면적</span>
@@ -7079,10 +8138,13 @@ export default function App() {
                             {/* Property Image & Hover scale */}
                             <div className="relative aspect-video w-full overflow-hidden bg-slate-100 rounded-lg">
                               <img 
-                                src={prop.imageUrl} 
+                                src={resolveDriveImageUrl(prop.imageUrl)} 
                                 alt={prop.name}
                                 referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                                }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-95" />
                               
@@ -7133,7 +8195,7 @@ export default function App() {
                                   {prop.category}
                                 </span>
                                 <span className="text-white text-sm sm:text-base font-black tracking-tight drop-shadow-sm/85">
-                                  {prop.transactionType} {getCleanedPriceText(prop.transactionType, prop.priceText)}
+                                  {getPropertyPriceDisplay(prop)}
                                 </span>
                               </div>
                             </div>
@@ -7526,24 +8588,100 @@ export default function App() {
               {/* Scrollable contents */}
               <div className="flex-grow overflow-y-auto p-5 sm:p-6 flex flex-col gap-6 text-xs sm:text-sm font-semibold text-slate-600">
                 
-                {/* Large Preview */}
-                <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-150">
-                  <img 
-                    src={selectedProperty.imageUrl} 
-                    alt={selectedProperty.name} 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover" 
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
-                  
-                  {/* Status Banner */}
-                  <div className="absolute bottom-4 left-4">
-                    <span className="text-xs text-amber-300 font-extrabold uppercase">매물 안내 실시간</span>
-                    <p className="text-white text-lg sm:text-xl font-black mt-0.5">
-                      {selectedProperty.transactionType} {getCleanedPriceText(selectedProperty.transactionType, selectedProperty.priceText)}
-                    </p>
-                  </div>
-                </div>
+                {/* Large Preview Image & Interactive Carousel */}
+                {(() => {
+                  const modalImages = selectedProperty.imageUrls && selectedProperty.imageUrls.length > 0
+                    ? selectedProperty.imageUrls
+                    : (selectedProperty.imageUrl ? [selectedProperty.imageUrl] : []);
+                  const totalImages = modalImages.length;
+                  const currentImg = modalImages[detailImageIndex] || selectedProperty.imageUrl;
+                  const resolved = resolveDriveImageUrl(currentImg);
+
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-150 shadow-xs border border-slate-100">
+                        <img 
+                          src={resolved} 
+                          alt={selectedProperty.name} 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain bg-slate-950" 
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/65 via-transparent to-transparent pointer-events-none" />
+                        
+                        {/* Prev / Next Chevrons */}
+                        {totalImages > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailImageIndex(prev => (prev - 1 + totalImages) % totalImages);
+                              }}
+                              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center transition-all cursor-pointer z-10 hover:scale-105 active:scale-95"
+                              title="이전 사진"
+                            >
+                              <ChevronLeft className="w-5 h-5 stroke-[2.5px]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailImageIndex(prev => (prev + 1) % totalImages);
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center transition-all cursor-pointer z-10 hover:scale-105 active:scale-95"
+                              title="다음 사진"
+                            >
+                              <ChevronRight className="w-5 h-5 stroke-[2.5px]" />
+                            </button>
+                            
+                            {/* Fraction Counter Indicator */}
+                            <div className="absolute top-4 right-4 bg-black/65 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] font-black tracking-wider leading-none select-none">
+                              {detailImageIndex + 1} / {totalImages}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Status Banner */}
+                        <div className="absolute bottom-4 left-4">
+                          <span className="text-xs text-amber-300 font-extrabold uppercase">매물 안내 실시간</span>
+                          <p className="text-white text-lg sm:text-xl font-black mt-0.5">
+                            {getPropertyPriceDisplay(selectedProperty)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Interactive Bottom Mini Thumbnail Strips */}
+                      {totalImages > 1 && (
+                        <div className="flex gap-1.5 items-center justify-start sm:justify-center overflow-x-auto py-1 scrollbar-none px-1">
+                          {modalImages.map((imgUrl, mIdx) => {
+                            const isSelected = mIdx === detailImageIndex;
+                            const tResolved = resolveDriveImageUrl(imgUrl);
+                            return (
+                              <button
+                                key={mIdx}
+                                type="button"
+                                onClick={() => setDetailImageIndex(mIdx)}
+                                className={`w-12 h-12 rounded-lg border-2 overflow-hidden transition-all shrink-0 cursor-pointer ${
+                                  isSelected ? 'border-amber-500 scale-102 ring-1 ring-amber-400 shadow-xs' : 'border-slate-200 opacity-60 hover:opacity-100'
+                                }`}
+                              >
+                                <img 
+                                  src={tResolved} 
+                                  alt={`사진섬네일 ${mIdx + 1}`} 
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_FALLBACK_IMAGE;
+                                  }}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Narrative description */}
                 <div className="flex flex-col gap-2">

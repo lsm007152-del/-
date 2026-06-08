@@ -36,6 +36,7 @@
         "type": { "type": "string" },
         "trade": { "type": "string" },
         "imageUrl": { "type": "string" },
+        "imageUrls": { "type": "array" },
         "latitude": { "type": "number" },
         "longitude": { "type": "number" },
         "mapLat": { "type": "number" },

@@ -344,7 +344,11 @@ app.post("/api/properties", async (req, res) => {
     const latitude = Number(rawData.latitude || rawData.mapLat || 35.151261);
     const longitude = Number(rawData.longitude || rawData.mapLng || 129.029706);
 
-    const imageUrl = String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80");
+    const imageUrls = Array.isArray(rawData.imageUrls)
+      ? rawData.imageUrls.map(String)
+      : (rawData.imageUrl ? [String(rawData.imageUrl)] : []);
+
+    const imageUrl = imageUrls.length > 0 ? imageUrls[0] : String(rawData.imageUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80");
 
     const normalizedProperty = {
       id,
@@ -369,7 +373,8 @@ app.post("/api/properties", async (req, res) => {
       longitude,
       mapLat: latitude,
       mapLng: longitude,
-      imageUrl
+      imageUrl,
+      imageUrls
     };
 
     // Recursive sanitizer for firestore fields on the server to prevent undefined and NaN errors
